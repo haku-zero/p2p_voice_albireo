@@ -1,4 +1,4 @@
-import settings
+from utils import config
 
 TEXTS = {
     "en": {
@@ -9,6 +9,7 @@ TEXTS = {
         "uplink": "SELECT_UPLINK_MODE",
         "host": "[ INITIALIZE_HOST_NODE ]",
         "client": "[ CONNECT_TO_REMOTE_NODE ]",
+        "disconnected": "DISCONNECTED:",
         "term": "TERMINATE_SESSION_PROMPT?",
         "mem": "MEMORIZE_OVERRIDE (settings.json)",
         "min": "[ MINIMIZE_TO_SYS_TRAY ]",
@@ -62,6 +63,7 @@ TEXTS = {
         "uplink": "请选择网络接入模式",
         "host": "[ 初始化主机节点 ]",
         "client": "[ 连接至远程节点 ]",
+        "disconnected": "连接已断开:",
         "term": "是否终止当前会话?",
         "mem": "记住选择 (settings.json)",
         "min": "[ 最小化至系统托盘 ]",
@@ -110,5 +112,5 @@ TEXTS = {
 }
 
 def get_text(key):
-    lang = settings.load_config().get("lang", "en")
+    lang = config.load_config().get("lang", "en")
     return TEXTS.get(lang, TEXTS["en"]).get(key, key)

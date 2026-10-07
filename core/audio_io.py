@@ -24,13 +24,13 @@ def get_audio_devices():
     for i in range(pyaudio_instance.get_device_count()):
         info = pyaudio_instance.get_device_info_by_index(i)
         
-        # 如果可能，我们只列出 WASAPI 设备，因为 MME 在某些电脑上会假死
-        prefix = ""
-        if wasapi_idx != -1:
-            if info['hostApi'] != wasapi_idx:
-                continue
-            prefix = "[WASAPI] "
-            
+        api_name = "Unknown"
+        try:
+            api_info = pyaudio_instance.get_host_api_info_by_index(info['hostApi'])
+            api_name = api_info.get('name', 'Unknown').replace("Windows ", "")
+        except: pass
+        
+        prefix = f"[{api_name}] "
         name = info["name"]
         if info["maxInputChannels"] > 0:
             inputs[f"{prefix}{name}"] = i
@@ -46,14 +46,16 @@ class PlaybackManager:
         self.stream = None
         self.volume = 0.1
         self.muted = False
+        self._stream_lock = threading.Lock()
         self.open_stream()
 
     def open_stream(self):
         if self.stream:
             self.stream.stop_stream()
             self.stream.close()
+        # Windows speakers are almost always Stereo. WASAPI often fails silently if requested to play Mono.
         self.stream = pyaudio_instance.open(format=pyaudio.paInt16,
-                                            channels=1,
+                                            channels=2,
                                             rate=48000,
                                             output=True,
                                             output_device_index=self.device_index)
@@ -69,12 +71,16 @@ class PlaybackManager:
         audio_arr = np.frombuffer(data_bytes, dtype=np.int16)
         if self.volume != 1.0:
             audio_arr = np.clip(audio_arr * self.volume, -32768, 32767).astype(np.int16)
-            data_bytes = audio_arr.tobytes()
+        
+        # Duplicate mono to stereo for safe playback
+        stereo_arr = np.repeat(audio_arr, 2)
+        data_bytes = stereo_arr.tobytes()
             
         try:
-            self.stream.write(data_bytes)
-        except:
-            pass
+            with self._stream_lock:
+                self.stream.write(data_bytes)
+        except Exception as e:
+            print(f"[Audio Output Error] {e}")
 
     def play_beep(self):
         if self.muted: return
@@ -85,7 +91,15 @@ class PlaybackManager:
         envelope = np.exp(-t * 15)
         samples = samples * envelope
         samples = (samples * 32767 * self.volume * 0.4).astype(np.int16)
-        threading.Thread(target=lambda: self.stream.write(samples.tobytes())).start()
+        # Duplicate mono to stereo
+        stereo_samples = np.repeat(samples, 2)
+        def _beep_write():
+            try:
+                with self._stream_lock:
+                    self.stream.write(stereo_samples.tobytes())
+            except Exception:
+                pass
+        threading.Thread(target=_beep_write).start()
 
     def shutdown(self):
         if self.stream:
@@ -134,7 +148,9 @@ class MicrophoneTrack(MediaStreamTrack):
                         pass
                 
                 info = pyaudio_instance.get_device_info_by_index(self.device_index) if self.device_index is not None else pyaudio_instance.get_default_input_device_info()
-                self.sample_rate = int(info.get('defaultSampleRate', 48000))
+                # 强制使用 48000 采样率！因为 WebRTC 的 Opus 编码器不支持 44100，会导致完全发不出声音！
+                # 即使麦克风硬件是 44100，PyAudio 也会在底层通过 PortAudio 自动帮我们重采样为 48000。
+                self.sample_rate = 48000
                 self.channels = min(int(info.get('maxInputChannels', 1)), 2)
                 if self.channels == 0: self.channels = 1
                 self.samples_per_frame = int(self.sample_rate * 0.02)
@@ -240,13 +256,26 @@ class MicrophoneTrack(MediaStreamTrack):
             raise big_e
 
 
-def start_playback_loop(track, playback_mgr, on_audio_level):
+def start_playback_loop(track, playback_mgr, on_audio_level, on_frame=None):
+    import av
+    resampler = av.AudioResampler(format='s16', layout='mono')
+    
     async def play():
         loop = asyncio.get_event_loop()
         while True:
             try:
                 frame = await track.recv()
+                
+                # IMPORTANT: Use AudioResampler to guarantee correct byte conversion for PyAudio
+                # Without this, aiortc may return fltp or s16p, causing to_ndarray().tobytes() to generate invalid formats
+                resampled_frames = resampler.resample(frame)
+                if not resampled_frames:
+                    continue
+                frame = resampled_frames[0]
                 data = frame.to_ndarray().tobytes()
+                
+                if on_frame:
+                    on_frame(data)
                 
                 # 必须将底层的音频物理写入丢进线程池，否则会阻塞整个 asyncio 网络循环，导致文字发送失败！
                 await loop.run_in_executor(None, playback_mgr.play_frame, data)
@@ -254,6 +283,7 @@ def start_playback_loop(track, playback_mgr, on_audio_level):
                 arr = np.frombuffer(data, dtype=np.int16)
                 rms = np.sqrt(np.mean(arr.astype(np.float32)**2))
                 on_audio_level(rms)
-            except Exception:
+            except Exception as e:
+                print(f"[Playback Loop End] {e}")
                 break
     asyncio.ensure_future(play())

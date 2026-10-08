@@ -28,18 +28,18 @@ class ChatWindow:
             self.window.transient(self.root)
             self.window.configure(fg_color=BG_COLOR)
             
-            self.chat_scroll = ctk.CTkScrollableFrame(self.window, fg_color=FRAME_COLOR, border_color=BORDER_COLOR, border_width=1)
+            self.chat_scroll = ctk.CTkScrollableFrame(self.window, fg_color=FRAME_COLOR, corner_radius=0, border_color=BORDER_COLOR, border_width=1)
             self.chat_scroll.pack(fill="both", expand=True, padx=10, pady=10)
             
             input_frame = ctk.CTkFrame(self.window, fg_color="transparent")
             input_frame.pack(fill="x", padx=10, pady=(0, 10))
             
-            self.chat_entry = ctk.CTkEntry(input_frame, placeholder_text=">", font=FONT_MAIN, fg_color=BG_COLOR, border_color=PRIMARY, text_color=PRIMARY)
+            self.chat_entry = ctk.CTkEntry(input_frame, placeholder_text=">", corner_radius=0, font=FONT_MAIN, fg_color=BG_COLOR, border_color=PRIMARY, text_color=PRIMARY)
             self.chat_entry.pack(side="left", fill="x", expand=True, padx=(0, 5))
             self.chat_entry.bind("<Return>", lambda e: self.send_chat_msg())
             
-            ctk.CTkButton(input_frame, text="[ TX ]", font=FONT_BOLD, width=50, fg_color="transparent", border_width=1, border_color=SUCCESS, text_color=SUCCESS, hover_color="#004433", command=self.send_chat_msg).pack(side="right")
-            ctk.CTkButton(input_frame, text="[ + ]", font=FONT_BOLD, width=40, fg_color="transparent", border_width=1, border_color="#F59E0B", text_color="#F59E0B", hover_color="#B45309", command=self.send_file_dialog).pack(side="right", padx=(0, 5))
+            ctk.CTkButton(input_frame, text="[ TX ]", font=FONT_BOLD, corner_radius=0, width=50, fg_color="transparent", border_width=1, border_color=SUCCESS, text_color=SUCCESS, hover_color="#004433", command=self.send_chat_msg).pack(side="right")
+            ctk.CTkButton(input_frame, text="[ + ]", font=FONT_BOLD, corner_radius=0, width=40, fg_color="transparent", border_width=1, border_color="#F59E0B", text_color="#F59E0B", hover_color="#B45309", command=self.send_file_dialog).pack(side="right", padx=(0, 5))
             
             self.window.protocol("WM_DELETE_WINDOW", self.hide)
         else:
@@ -62,7 +62,7 @@ class ChatWindow:
         if not msg: return
         self.chat_entry.delete(0, "end")
         self.append_chat(msg, sender=self.root.local_id)
-        self.engine.send_chat(msg, self.root.local_id)
+        self.engine.chat_mgr.send_chat(msg)
 
     def send_file_dialog(self):
         from tkinter import filedialog
@@ -76,7 +76,7 @@ class ChatWindow:
             self.open()
             self.window.withdraw()
             
-        msg_frame = ctk.CTkFrame(self.chat_scroll, fg_color=BG_COLOR if is_system else "#1A233A", corner_radius=8)
+        msg_frame = ctk.CTkFrame(self.chat_scroll, fg_color=BG_COLOR if is_system else FRAME_COLOR, corner_radius=0, border_width=1, border_color=SECONDARY if is_system else BORDER_COLOR)
         msg_frame.pack(fill="x", padx=5, pady=5)
         
         lbl_sender = ctk.CTkLabel(msg_frame, text=sender, font=("Consolas", 10, "bold"), text_color=SECONDARY if is_system else PRIMARY)
@@ -107,7 +107,7 @@ class ChatWindow:
     def add_file_transfer(self, sender, filename, size, file_id):
         text = f"{_T('uploading')} {filename} ({size} bytes)"
         msg_frame = self.append_chat(text, is_system=False, sender=sender)
-        prog = ctk.CTkProgressBar(msg_frame, width=200, height=8, progress_color=SUCCESS)
+        prog = ctk.CTkProgressBar(msg_frame, width=200, height=8, corner_radius=0, progress_color=SUCCESS)
         prog.set(0.0)
         prog.pack(anchor="w", padx=10, pady=(0, 10))
         self.chat_progress_bars[file_id] = {"prog": prog, "frame": msg_frame, "filename": filename}

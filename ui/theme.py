@@ -1,15 +1,15 @@
 # Cyberpunk / Tech Theme Constants
-BG_COLOR = "#090C15"          
-FRAME_COLOR = "#111726"       
-BORDER_COLOR = "#1E293B"      
-PRIMARY = "#00F0FF"           
-PRIMARY_HOV = "#005566"       
-SECONDARY = "#A23BFF"         
-SECONDARY_HOV = "#441177"     
-SUCCESS = "#00FF9D"           
-DANGER = "#FF003C"            
-DANGER_HOV = "#550011"        
-TEXT_COLOR = "#E0E7FF"        
+BG_COLOR = "#020205"          
+FRAME_COLOR = "#080811"       
+BORDER_COLOR = "#00FFFF"      
+PRIMARY = "#00FFFF"           
+PRIMARY_HOV = "#FF00FF"       
+SECONDARY = "#FF00FF"         
+SECONDARY_HOV = "#00FF00"     
+SUCCESS = "#00FF00"           
+DANGER = "#FF0055"            
+DANGER_HOV = "#FF00FF"        
+TEXT_COLOR = "#FFFFFF"        
 FONT_MAIN = ("Consolas", 12)
 FONT_BOLD = ("Consolas", 12, "bold")
-FONT_TITLE = ("Consolas", 14, "bold")
+FONT_TITLE = ("Consolas", 16, "bold")

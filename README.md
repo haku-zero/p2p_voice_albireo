@@ -1,7 +1,7 @@
 # 🌌 Albireo
 
 <div align="center">
-  <p><b>A Hardcore, Serverless P2P Voice & File Transfer Terminal with Cyberpunk Aesthetics.</b></p>
+  <p><b>A Hardcore, Serverless P2P Voice & Collaboration Terminal with Cyberpunk Aesthetics.</b></p>
   <p>
     <img src="https://img.shields.io/badge/python-3.9%2B-brightgreen.svg" alt="Python Version">
     <img src="https://img.shields.io/badge/WebRTC-aiortc-orange.svg" alt="WebRTC">
@@ -12,123 +12,78 @@
 
 ---
 
-**Albireo** is a fully decentralized, pure P2P-based communication terminal designed for hardcore users. It operates completely serverless—all data (voice, text, and files) is transmitted directly between peers via WebRTC with End-to-End Encryption (E2EE), ensuring absolute privacy and security.
+**Albireo Mesh** is a fully decentralized, pure P2P-based communication terminal built for hardcore users. It operates completely serverless—all data (voice, text, screen sharing, and governance) is transmitted directly between peers via WebRTC with Ed25519 Cryptographic Signatures, ensuring absolute privacy, autonomy, and security.
 
-Recent updates have completely overhauled the architecture, transforming Albireo into an enterprise-grade modular application capable of **Star-Topology Multi-Node** connections (SFU/MCU architecture), featuring a custom elastic jitter buffer and concurrent file multiplexing.
+Recent updates have completely overhauled the architecture, transforming Albireo into an enterprise-grade modular application capable of **Star-Topology Multi-Node** connections, featuring a highly-decoupled EventBus architecture and an advanced Network Governance Engine.
 
----
+## ✨ Core Features
 
-## ✨ Key Features
+### 🛡️ Unbreakable P2P Networking
+- **Zero-Server Architecture**: WebRTC data channels and media tracks form a star-topology mesh directly between the Host and Clients. No central server stores your data.
+- **Ed25519 Cryptography**: Every chat, vote, and command is cryptographically signed using `PyNaCl`. Network spoofing and replay attacks are physically impossible.
 
-### 🎙️ Extreme P2P Audio Engine (`CustomMixerTrack`)
-- **Serverless Star Topology**: The Host node acts as a lightweight SFU (Selective Forwarding Unit) and MCU (Multipoint Control Unit), routing and mixing audio for all connected clients.
-- **60ms Elastic Jitter Buffer**: Custom NumPy-based audio frame buffering algorithm completely eliminates audio tearing and stuttering caused by network fluctuations.
-- **Hardware Integration**: Native PyAudio integration with Push-to-Talk (PTT) and Open Mic modes.
+### 🎙️ High-Fidelity Audio & Video
+- **Dynamic Jitter Buffer**: Custom audio mixer with elastic buffering ensures smooth audio playback even under high network latency.
+- **Peer-to-Peer Screen Sharing**: Granular, permission-based screen sharing. No forced takeovers.
 
-### ⚡ Concurrent Multiplexed File Transfers
-- **UUID-Prefixed Data Chunks**: Say goodbye to blocking transfers. Albireo utilizes a custom multiplexing protocol over WebRTC DataChannels, allowing **multiple files and text messages to be transmitted simultaneously in both directions**.
-- **In-Chat Rendering**: Real-time Cyberpunk progress bars and instant, in-place image rendering for `.jpg`/`.png` files upon transfer completion.
+### 🏛️ Advanced Network Governance
+Albireo isn't just a chat app; it's a micro-society. The network creator chooses the governance model:
+- **Democracy Mode**: Peer moderation. Any node can initiate a vote to banish a malicious peer. Requires a >50% majority to execute the banishment.
+- **Archon Mode (Dictatorship)**: The Host acts as the absolute "Archon" with instant banish rights.
+  - **Heir Succession**: The Archon can designate an Heir. If the Archon disconnects, the Heir ascends seamlessly.
+  - **Chaos Election**: If the Archon disconnects without an Heir, the remaining nodes automatically trigger a decentralized election protocol to appoint the new Archon.
 
-### 🏗️ Highly Decoupled Architecture (DDD & MVC)
-- The codebase has been surgically refactored for High Cohesion and Low Coupling:
-  - **`core/`**: Deep business logic, entirely stripped of UI dependencies. Contains the WebRTC Engine, Audio Mixer, and virtual `AppRunner`.
-  - **`ui/`**: Pure visual presentation layer utilizing `customtkinter`.
-  - **`utils/`**: Configuration and i18n dictionaries.
-
-### 🎨 Deep Void Cyberpunk Aesthetics
-- Handcrafted deep space UI built with `customtkinter`.
-- Neon borders, hover glows, and strict monospace typography (`Consolas`).
-- Seamless hot-swapping between English and Chinese (`i18n`).
+### 💻 Cyberpunk UI Experience
+- Rendered in a high-performance GUI using `CustomTkinter`.
+- Neon-cyberpunk aesthetic (`#020205` deep space, `#00FFFF` cyan, `#FF00FF` magenta) with highly responsive modals, floating toasts, and real-time network graphs.
 
 ---
 
-## 🛠️ Installation
+## 🛠️ Architecture
 
-### 1. Requirements
-Ensure you have **Python 3.9 or higher** installed on your system.
+Albireo follows a strict **High Cohesion, Low Coupling** modular design:
+- **`utils/events.py`**: Global Singleton `EventBus`. The backbone of the application, decoupling the UI completely from the networking engine.
+- **`core/engine.py`**: The WebRTC state machine handling SDP signaling, ICE gathering, and DataChannels.
+- **`core/governance.py`**: The decentralized state machine handling the Democracy/Archon logic, syncs state across all connected nodes.
+- **`core/crypto.py`**: Local identity generation and payload signing/verification.
 
-### 2. Clone the Repository
-```bash
-git clone https://github.com/your-username/albireo-p2p.git
-cd albireo-p2p
-```
+---
 
-### 3. Install Dependencies
-```bash
-pip install customtkinter pyaudio aiortc av pystray Pillow numpy
-```
-*(Note: If you encounter compilation errors installing `pyaudio` on Windows, you can install the precompiled binary using `pip install pipwin` followed by `pipwin install pyaudio`)*
+## 🚀 Getting Started
 
-### 4. Launch the Terminal
+### Prerequisites
+- Python 3.9+
+- A working microphone and camera (for screen share).
+
+### Installation
+
+1. Clone the repository:
+   ```bash
+   git clone https://github.com/yourusername/albireo-mesh.git
+   cd albireo-mesh
+   ```
+
+2. Install dependencies:
+   ```bash
+   pip install -r requirements.txt
+   ```
+   *(Dependencies include `aiortc`, `customtkinter`, `sounddevice`, `PyNaCl`, `numpy`, `av`, `Pillow`, `mss`)*
+
+### Usage
+
+Launch the terminal:
 ```bash
 python main.py
 ```
 
----
-
-## 🎮 How to Connect
-
-Since Albireo is a pure P2P application, establishing a connection requires a manual "Handshake Token" (SDP Base64) exchange via any third-party secure channel (e.g., Signal, Telegram).
-
-1. **Host Node**
-   - Click `[ INITIALIZE_HOST_NODE ]`.
-   - You will enter the room as the Host. Wait for Clients to send you their Offer Tokens.
-
-2. **Client Node**
-   - Click `[ CONNECT_TO_REMOTE_NODE ]`.
-   - Click `[ GENERATE_UPLINK_OFFER ]` to generate your Offer Token. Copy and send it to the Host.
-
-3. **Handshake Phase**
-   - **Host**: Clicks the `[ GENERATE_INVITE_TOKEN ]` wizard, pastes the Client's Offer Token into Phase 1, and clicks `[ COMPUTE_AUTHORIZATION_ANSWER ]`. Sends the generated **Answer Token** back to the Client.
-   - **Client**: Pastes the Host's Answer Token into Phase 2 and clicks `[ FINALIZE_UPLINK ]`.
-   - **Done**: The secure P2P link is established! The topology list will update, and you can immediately begin transmitting voice and files.
+1. **Host a Network**: Click "Initialize Node" as Host. The app will generate an SDP Offer. Share this encrypted base64 string with your friends via any secure out-of-band channel.
+2. **Join a Network**: Click "Connect to Node", paste the Host's SDP Offer, and generate your Answer. Send it back to the Host.
+3. **Communicate**: Once connected, voice chat is instant. Use the chat bar to send messages, or click on a peer's avatar to initiate Governance actions (Vote Kick / Assign Heir).
 
 ---
 
-## 📁 Architecture Overview
+## 🤝 Contributing
+Pull requests are welcome. For major architectural changes, please open an issue first to discuss what you would like to change. Ensure all Pub/Sub events adhere to the defined `EventBus` payloads.
 
-```text
-p2p-voice/
-│
-├── main.py                 # Pure Entry Point
-├── core/                   # Deep Engine Layer
-│   ├── runner.py           # Virtual Executor (App Lifecycle & State Machine)
-│   ├── engine.py           # WebRTC Call Control & DataChannel Orchestration
-│   ├── audio_io.py         # PyAudio Hardware I/O Bridging
-│   ├── audio_mixer.py      # CustomMixerTrack (60ms Jitter Buffer & NumPy Mixing)
-│   └── file_transfer.py    # UUID Concurrent File Chunking Protocol
-│
-├── ui/                     # View Layer (CustomTkinter)
-│   ├── ui_manager.py       # Main UI Controller & Top Bar
-│   ├── chat_view.py        # Chat bubbles & File progress bars
-│   ├── member_view.py      # Topology, Ping, and Voice Activity Indicators (VAD)
-│   ├── modals.py           # Host/Client Signaling Wizards
-│   └── theme.py            # Cyberpunk Color & Font Constants
-│
-└── utils/                  # Shared Utilities
-    ├── config.py           # settings.json I/O persistence
-    └── i18n.py             # Internationalization dictionaries
-```
-
----
-
-## 🧪 Automated Integration Tests
-
-Albireo includes a hardcore, headless integration test suite that simulates multi-node networking in memory.
-
-```bash
-# Run tests from the project root:
-python -m test.test_multinode
-```
-
-This suite spins up 1 Host and 2 Clients simultaneously, verifying:
-- Star-Topology multi-way handshake stability.
-- Prevention of Chat Relay infinite loops (Relay Guards).
-- Proper UUID multiplexing during file transfers.
-- Jitter buffer under-run and over-run constraints.
-
----
-
-## 📜 License
-This project is open-sourced under the [MIT License](LICENSE). 
-You are free to use, modify, and distribute it, provided you retain the original author information.
+## 📄 License
+[MIT](https://choosealicense.com/licenses/mit/)

@@ -82,6 +82,17 @@ class PlaybackManager:
         except Exception as e:
             print(f"[Audio Output Error] {e}")
 
+    def play_stereo_frame(self, data_bytes):
+        if self.muted: return
+        audio_arr = np.frombuffer(data_bytes, dtype=np.int16)
+        if self.volume != 1.0:
+            audio_arr = np.clip(audio_arr * self.volume, -32768, 32767).astype(np.int16)
+        try:
+            with self._stream_lock:
+                self.stream.write(audio_arr.tobytes())
+        except Exception as e:
+            print(f"[Audio Output Error] {e}")
+
     def play_beep(self):
         if self.muted: return
         duration = 0.2
@@ -256,7 +267,7 @@ class MicrophoneTrack(MediaStreamTrack):
             raise big_e
 
 
-def start_playback_loop(track, playback_mgr, on_audio_level, on_frame=None):
+def start_playback_loop(track, playback_mgr, on_audio_level, on_frame=None, play_local=True):
     import av
     resampler = av.AudioResampler(format='s16', layout='mono')
     
@@ -277,8 +288,8 @@ def start_playback_loop(track, playback_mgr, on_audio_level, on_frame=None):
                 if on_frame:
                     on_frame(data)
                 
-                # 必须将底层的音频物理写入丢进线程池，否则会阻塞整个 asyncio 网络循环，导致文字发送失败！
-                await loop.run_in_executor(None, playback_mgr.play_frame, data)
+                if play_local:
+                    await loop.run_in_executor(None, playback_mgr.play_frame, data)
                 
                 arr = np.frombuffer(data, dtype=np.int16)
                 rms = np.sqrt(np.mean(arr.astype(np.float32)**2))

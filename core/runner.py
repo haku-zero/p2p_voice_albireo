@@ -7,6 +7,7 @@ from utils import config
 from core.audio_io import get_audio_devices, MicrophoneTrack, PlaybackManager
 from core.engine import WebRTCEngine
 from ui import UIManager
+from ui.theme import *
 from utils.i18n import get_text as _T
 
 class AppRunner(ctk.CTk):
@@ -24,7 +25,7 @@ class AppRunner(ctk.CTk):
         self.playback_mgr = PlaybackManager()
         self.local_mic = MicrophoneTrack(self.playback_mgr)
         
-        self.engine = WebRTCEngine(self.local_mic, self.playback_mgr, self.loop, self.on_webrtc_event)
+        self.engine = WebRTCEngine(self.local_mic, self.playback_mgr, self.loop)
         
         self.ui_ctrl = UIManager(self, self.engine, self.inputs_map, self.outputs_map, 
                                     self.local_mic, self.playback_mgr, self.loop)
@@ -39,40 +40,8 @@ class AppRunner(ctk.CTk):
         asyncio.set_event_loop(self.loop)
         self.loop.run_forever()
 
-    def on_webrtc_event(self, event_type, **kwargs):
-        member_id = kwargs.get("member_id")
-        if event_type == "talking":
-            rms = kwargs.get("rms", 0)
-            self.after(0, self.ui_ctrl.update_talking_state, member_id, rms)
-        elif event_type == "status":
-            status = kwargs.get("status")
-            self.after(0, self.ui_ctrl.update_status, member_id, status)
-        elif event_type == "stats":
-            ping = kwargs.get("ping", 0)
-            self.after(0, self.ui_ctrl.update_stats, member_id, ping)
-        elif event_type == "chat_message":
-            msg = kwargs.get("message", "")
-            self.after(0, self.ui_ctrl.append_chat, msg, False, None, member_id)
-        elif event_type == "local_mic_level":
-            rms = kwargs.get("rms", 0.0)
-            self.after(0, self.ui_ctrl.update_talking_state, self.local_id, rms)
-        elif event_type == "file_incoming":
-            fname = kwargs.get("filename", "")
-            sz = kwargs.get("size", 0)
-            file_id = kwargs.get("file_id")
-            self.after(0, self.ui_ctrl.add_file_transfer, member_id, fname, sz, file_id)
-        elif event_type == "file_done":
-            fname = kwargs.get("filename", "")
-            fpath = kwargs.get("filepath", "")
-            file_id = kwargs.get("file_id")
-            self.after(0, self.ui_ctrl.complete_file_transfer, member_id, fname, fpath, file_id)
-        elif event_type == "file_progress":
-            file_id = kwargs.get("file_id")
-            progress = kwargs.get("progress", 0.0)
-            self.after(0, self.ui_ctrl.update_file_progress, file_id, progress)
-        elif event_type == "all_disconnected":
-            self.after(0, self.handle_all_disconnected)
-
+        from utils.events import event_bus
+        event_bus.on("all_disconnected", lambda: self.after(0, self.handle_all_disconnected))
     def handle_all_disconnected(self):
         self.engine.reset()
         self.ui_ctrl.reset_room()
@@ -80,11 +49,11 @@ class AppRunner(ctk.CTk):
     def show_id_selection(self):
         for widget in self.winfo_children():
             widget.destroy()
-        self.configure(fg_color="#090C15")
-        frame = ctk.CTkFrame(self, fg_color="#111726", corner_radius=2, border_width=1, border_color="#1E293B")
+        self.configure(fg_color=BG_COLOR)
+        frame = ctk.CTkFrame(self, fg_color=FRAME_COLOR, corner_radius=0, border_width=1, border_color=BORDER_COLOR)
         frame.pack(pady=100, padx=50, fill="both", expand=True)
-        ctk.CTkLabel(frame, text=_T("sys_init"), font=("Consolas", 24, "bold"), text_color="#00F0FF").pack(pady=30)
-        self.id_entry = ctk.CTkEntry(frame, placeholder_text=_T("input_callsign"), height=40, corner_radius=2, font=("Consolas", 14), border_color="#00F0FF", fg_color="#090C15", text_color="#00F0FF")
+        ctk.CTkLabel(frame, text=_T("sys_init"), font=FONT_TITLE, text_color=PRIMARY).pack(pady=30)
+        self.id_entry = ctk.CTkEntry(frame, placeholder_text=_T("input_callsign"), height=40, corner_radius=0, font=FONT_MAIN, border_color=PRIMARY, fg_color=BG_COLOR, text_color=PRIMARY)
         
         saved_id = config.load_config().get("local_id", "")
         if saved_id:
@@ -92,7 +61,7 @@ class AppRunner(ctk.CTk):
             
         self.id_entry.pack(pady=20, padx=50, fill="x")
         self.id_entry.bind("<Return>", lambda e: self.submit_id())
-        ctk.CTkButton(frame, text=_T("establish"), height=45, corner_radius=2, font=("Consolas", 15, "bold"), fg_color="transparent", border_width=1, border_color="#00F0FF", text_color="#00F0FF", hover_color="#004455", command=self.submit_id).pack(pady=10, padx=50, fill="x")
+        ctk.CTkButton(frame, text=_T("establish"), height=45, corner_radius=0, font=FONT_TITLE, fg_color="transparent", border_width=1, border_color=PRIMARY, text_color=PRIMARY, hover_color=PRIMARY_HOV, command=self.submit_id).pack(pady=10, padx=50, fill="x")
 
         # Language Selector
         lang_frame = ctk.CTkFrame(self, fg_color="transparent")
@@ -112,41 +81,27 @@ class AppRunner(ctk.CTk):
     def submit_id(self):
         uid = self.id_entry.get().strip()
         if not uid: return
-        self.local_id = uid
+        self.callsign = uid
+        self.engine.callsign = uid
+        self.engine.callsign_map[self.engine.local_id] = uid
+        self.local_id = self.engine.local_id
         config.save_config("local_id", uid)
-        self.show_role_selection()
+        self.enter_room('node')
 
     def show_role_selection(self):
-        for widget in self.winfo_children():
-            widget.destroy()
-            
-        self.configure(fg_color="#090C15")
-        frame = ctk.CTkFrame(self, fg_color="#111726", corner_radius=2, border_width=1, border_color="#1E293B")
-        frame.pack(pady=100, padx=50, fill="both", expand=True)
-        
-        ctk.CTkLabel(frame, text=f"{_T('auth')} {self.local_id}", font=("Consolas", 22, "bold"), text_color="#00FF9D").pack(pady=30)
-        ctk.CTkLabel(frame, text=_T("uplink"), text_color="#64748B", font=("Consolas", 14)).pack(pady=10)
-        
-        ctk.CTkButton(frame, text=_T("host"), height=45, corner_radius=2, font=("Consolas", 15, "bold"), fg_color="transparent", border_width=1, border_color="#A23BFF", text_color="#A23BFF", hover_color="#441177", command=lambda: self.enter_room('host')).pack(pady=20, padx=50, fill="x")
-        ctk.CTkButton(frame, text=_T("client"), height=45, corner_radius=2, font=("Consolas", 15, "bold"), fg_color="transparent", border_width=1, border_color="#00FF9D", text_color="#00FF9D", hover_color="#004433", command=lambda: self.enter_room('client')).pack(pady=10, padx=50, fill="x")
-
-        # Settings
-        ctk.CTkButton(self, text="< " + _T("exit_link").replace("< ", ""), width=100, font=("Consolas", 12), fg_color="transparent", border_width=1, border_color="#FF003C", text_color="#FF003C", hover_color="#550011", command=self.show_id_selection).pack(side="bottom", pady=20)
+        pass
 
 
     def enter_room(self, role):
         for widget in self.winfo_children():
             widget.destroy()
             
-        self.configure(fg_color="#090C15")
+        self.configure(fg_color=BG_COLOR)
         self.ui_ctrl.build_top_bar()
         work_frame = ctk.CTkFrame(self, fg_color="transparent")
         work_frame.pack(fill="both", expand=True, padx=10, pady=10)
         
-        if role == 'host':
-            self.ui_ctrl.build_host_ui(work_frame)
-        else:
-            self.ui_ctrl.build_client_ui(work_frame)
+        self.ui_ctrl.build_node_ui(work_frame)
 
     def on_closing(self):
         cfg = config.load_config()
@@ -214,4 +169,6 @@ class AppRunner(ctk.CTk):
     def _real_quit(self):
         self.engine.shutdown()
         self.playback_mgr.shutdown()
+        if hasattr(self, 'loop') and self.loop.is_running():
+            self.loop.call_soon_threadsafe(self.loop.stop)
         self.destroy()

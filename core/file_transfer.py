@@ -3,6 +3,7 @@ import json
 import uuid
 import asyncio
 from utils import config
+from utils.events import event_bus
 
 class FileTransferManager:
     def __init__(self, engine):
@@ -10,11 +11,11 @@ class FileTransferManager:
         self.file_channels = {}
         self.file_buffers = {}
         self.file_metadata = {}
+        self.file_acks = {}
+        self.transfer_tasks = []
 
     def setup_channel(self, channel, initial_id):
         self.file_channels[initial_id] = channel
-        self.file_buffers[initial_id] = bytearray()
-        self.file_metadata[initial_id] = None
         
         @channel.on("message")
         def on_message(message):
@@ -25,64 +26,98 @@ class FileTransferManager:
                     if meta.get("type") == "file_meta":
                         file_id = meta["file_id"]
                         self.file_metadata[file_id] = meta
-                        self.file_buffers[file_id] = bytearray()
-                        sender = meta.get("sender", current_id)
-                        self.engine.update_ui_cb("file_incoming", member_id=sender, filename=meta["name"], size=meta["size"], file_id=file_id)
                         
-                        if self.engine.is_host:
-                            for rid, ch in self.file_channels.items():
-                                if rid != current_id and ch.readyState == "open":
-                                    ch.send(message)
+                        save_dir = config.load_config().get("save_dir", os.path.join(os.getcwd(), "downloads"))
+                        os.makedirs(save_dir, exist_ok=True)
+                        f_path = os.path.join(save_dir, meta["name"] + ".part")
+                        
+                        offset = 0
+                        if os.path.exists(f_path):
+                            offset = os.path.getsize(f_path)
+                            if offset > meta["size"]:
+                                offset = 0
+                                os.remove(f_path)
                                 
+                        self.file_buffers[file_id] = {"file": open(f_path, "ab"), "path": f_path, "bytes_received": offset}
+                        
+                        ack = json.dumps({"type": "file_ack", "file_id": file_id, "offset": offset, "sender": meta.get("sender", "")})
+                        channel.send(ack)
+                        
+                        sender = meta.get("sender", current_id)
+                        event_bus.emit("file_incoming", sender, meta["name"], meta["size"], file_id)
+                                
+                    elif meta.get("type") == "file_ack":
+                        file_id = meta.get("file_id")
+                        if file_id not in self.file_acks:
+                            self.file_acks[file_id] = {}
+                        
+                        ack_sender = meta.get("sender", current_id)
+                        self.file_acks[file_id][ack_sender] = meta.get("offset", 0)
+                                    
                     elif meta.get("type") == "file_done":
                         file_id = meta.get("file_id")
                         if file_id in self.file_buffers and file_id in self.file_metadata:
-                            save_dir = config.load_config().get("save_dir", os.path.join(os.getcwd(), "downloads"))
-                            if not os.path.exists(save_dir):
-                                os.makedirs(save_dir)
                             f_meta = self.file_metadata[file_id]
-                            f_path = os.path.join(save_dir, f_meta["name"])
-                            with open(f_path, "wb") as f:
-                                f.write(self.file_buffers[file_id])
-                            sender = f_meta.get("sender", current_id)
-                            self.engine.update_ui_cb("file_done", member_id=sender, filename=f_meta["name"], filepath=f_path, file_id=file_id)
+                            buf_info = self.file_buffers[file_id]
                             
-                            if self.engine.is_host:
-                                for rid, ch in self.file_channels.items():
-                                    if rid != current_id and ch.readyState == "open":
-                                        ch.send(message)
+                            if not buf_info["file"].closed:
+                                buf_info["file"].close()
+                            
+                            save_dir = config.load_config().get("save_dir", os.path.join(os.getcwd(), "downloads"))
+                            final_path = os.path.join(save_dir, f_meta["name"])
+                            
+                            if os.path.exists(final_path):
+                                os.remove(final_path)
+                            os.rename(buf_info["path"], final_path)
+                            
+                            sender = f_meta.get("sender", current_id)
+                            event_bus.emit("file_done", sender, f_meta["name"], final_path, file_id)
                                     
                             del self.file_buffers[file_id]
                             del self.file_metadata[file_id]
+                            self.file_acks.pop(file_id, None)
                 except Exception as e:
                     print(f"File meta err: {e}")
             elif isinstance(message, bytes):
-                if len(message) < 16: return
+                if len(message) < 24: return
                 file_id_bytes = message[:16]
-                chunk = message[16:]
+                offset_bytes = message[16:24]
+                chunk = message[24:]
+                
                 try:
                     file_id = str(uuid.UUID(bytes=file_id_bytes))
+                    chunk_offset = int.from_bytes(offset_bytes, byteorder='little')
                 except:
                     return
                 
                 if file_id in self.file_buffers:
-                    self.file_buffers[file_id].extend(chunk)
                     meta = self.file_metadata[file_id]
-                    if meta and meta.get("size"):
-                        progress = len(self.file_buffers[file_id]) / meta["size"]
-                        sender = meta.get("sender", current_id)
-                        self.engine.update_ui_cb("file_progress", member_id=sender, progress=progress, file_id=file_id)
+                    buf_info = self.file_buffers[file_id]
                     
-                    if self.engine.is_host:
-                        for rid, ch in self.file_channels.items():
-                            if rid != current_id and ch.readyState == "open":
-                                ch.send(message)
+                    if chunk_offset < buf_info["bytes_received"]:
+                        overlap = buf_info["bytes_received"] - chunk_offset
+                        if overlap < len(chunk):
+                            chunk = chunk[overlap:]
+                            buf_info["file"].write(chunk)
+                            buf_info["bytes_received"] += len(chunk)
+                    elif chunk_offset == buf_info["bytes_received"]:
+                        buf_info["file"].write(chunk)
+                        buf_info["bytes_received"] += len(chunk)
+                    else:
+                        buf_info["file"].write(chunk)
+                        buf_info["bytes_received"] += len(chunk)
+                        
+                    if meta and meta.get("size"):
+                        progress = buf_info["bytes_received"] / meta["size"]
+                        sender = meta.get("sender", current_id)
+                        event_bus.emit("file_progress", sender, progress, file_id)
 
     def send_file(self, filepath, sender_id):
         filename = os.path.basename(filepath)
         size = os.path.getsize(filepath)
         file_id = str(uuid.uuid4())
         file_id_bytes = uuid.UUID(file_id).bytes
+        self.file_acks[file_id] = {}
         
         def _send():
             meta = json.dumps({"type": "file_meta", "file_id": file_id, "sender": sender_id, "name": filename, "size": size})
@@ -90,29 +125,50 @@ class FileTransferManager:
                 if ch.readyState == "open":
                     ch.send(meta)
                     
-            async def _pump():
-                with open(filepath, "rb") as f:
-                    sent_bytes = 0
-                    while chunk := f.read(16384):
-                        chunk_with_header = file_id_bytes + chunk
-                        for ch in list(self.file_channels.values()):
-                            if ch.readyState == "open":
-                                try:
-                                    while getattr(ch, "bufferedAmount", 0) > 1024 * 1024:
-                                        await asyncio.sleep(0.01)
-                                    ch.send(chunk_with_header)
-                                except Exception:
-                                    pass
+            def _pump_to_channel(ch_id, ch, is_primary):
+                async def _inner():
+                    # Wait up to 3 seconds for ACK
+                    for _ in range(30):
+                        if file_id in self.file_acks and ch_id in self.file_acks[file_id]:
+                            break
+                        await asyncio.sleep(0.1)
                         
-                        sent_bytes += len(chunk)
-                        self.engine.update_ui_cb("file_progress", member_id="local", progress=sent_bytes/size, file_id=file_id)
-                        await asyncio.sleep(0)
-                
-                done_msg = json.dumps({"type": "file_done", "file_id": file_id, "sender": sender_id})
-                for ch in self.file_channels.values():
+                    offset = 0
+                    if file_id in self.file_acks and ch_id in self.file_acks[file_id]:
+                        offset = self.file_acks[file_id][ch_id]
+                        
+                    with open(filepath, "rb") as f:
+                        if offset > 0:
+                            f.seek(offset)
+                        sent_bytes = offset
+                        
+                        while chunk := f.read(16384):
+                            offset_bytes = sent_bytes.to_bytes(8, byteorder='little')
+                            chunk_with_header = file_id_bytes + offset_bytes + chunk
+                            if ch.readyState != "open":
+                                break
+                            try:
+                                while getattr(ch, "bufferedAmount", 0) > 1024 * 1024:
+                                    await asyncio.sleep(0.01)
+                                ch.send(chunk_with_header)
+                            except Exception:
+                                break
+                            
+                            sent_bytes += len(chunk)
+                            if is_primary:
+                                progress = sent_bytes / size if size > 0 else 1.0
+                                event_bus.emit("file_progress", "local", progress, file_id)
+                            await asyncio.sleep(0)
+                    
                     if ch.readyState == "open":
+                        done_msg = json.dumps({"type": "file_done", "file_id": file_id, "sender": sender_id})
                         ch.send(done_msg)
-            self.engine.loop.create_task(_pump())
+                return _inner()
+                
+            open_channels = {rid: ch for rid, ch in self.file_channels.items() if ch.readyState == "open"}
+            for i, (rid, ch) in enumerate(open_channels.items()):
+                t = self.engine.loop.create_task(_pump_to_channel(rid, ch, is_primary=(i == 0)))
+                self.transfer_tasks.append(t)
         self.engine.loop.call_soon_threadsafe(_send)
         return file_id
 
@@ -121,7 +177,28 @@ class FileTransferManager:
             f_chan = self.file_channels.pop(old_id)
             self.file_channels[new_id] = f_chan
 
+    def remove_connection(self, peer_id):
+        if peer_id in self.file_channels:
+            del self.file_channels[peer_id]
+        
+        to_delete = [fid for fid, meta in self.file_metadata.items() if meta and meta.get("sender") == peer_id]
+        for fid in to_delete:
+            if fid in self.file_buffers:
+                if not self.file_buffers[fid]["file"].closed:
+                    self.file_buffers[fid]["file"].close()
+            self.file_buffers.pop(fid, None)
+            self.file_metadata.pop(fid, None)
+
     def clear(self):
+        for t in self.transfer_tasks:
+            if not t.done():
+                t.cancel()
+        self.transfer_tasks.clear()
+        
         self.file_channels.clear()
+        for buf in self.file_buffers.values():
+            if not buf["file"].closed:
+                buf["file"].close()
         self.file_buffers.clear()
         self.file_metadata.clear()
+        self.file_acks.clear()

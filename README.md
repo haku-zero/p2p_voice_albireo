@@ -1,89 +1,131 @@
 # 🌌 Albireo
 
 <div align="center">
-  <p><b>A Hardcore, Serverless P2P Voice & Collaboration Terminal with Cyberpunk Aesthetics.</b></p>
-  <p>
-    <img src="https://img.shields.io/badge/python-3.9%2B-brightgreen.svg" alt="Python Version">
-    <img src="https://img.shields.io/badge/WebRTC-aiortc-orange.svg" alt="WebRTC">
-    <img src="https://img.shields.io/badge/UI-CustomTkinter-blueviolet.svg" alt="CustomTkinter">
-    <img src="https://img.shields.io/badge/license-MIT-blue.svg" alt="License">
-  </p>
+  <img src="https://img.shields.io/badge/Python-3.10+-blue.svg" alt="Python Version">
+  <img src="https://img.shields.io/badge/WebRTC-aiortc-orange.svg" alt="WebRTC">
+  <img src="https://img.shields.io/badge/Cryptography-Ed25519-success.svg" alt="Security">
+  <img src="https://img.shields.io/badge/Architecture-Decentralized-purple.svg" alt="Architecture">
 </div>
 
----
+<h1 align="center">Albireo P2P Communication Protocol</h1>
 
-**Albireo Mesh** is a fully decentralized, pure P2P-based communication terminal built for hardcore users. It operates completely serverless—all data (voice, text, screen sharing, and governance) is transmitted directly between peers via WebRTC with Ed25519 Cryptographic Signatures, ensuring absolute privacy, autonomy, and security.
+<p align="center">
+  <b>A serverless, cryptographically secure, and decentralized unified communication engine.</b>
+</p>
 
-Recent updates have completely overhauled the architecture, transforming Albireo into an enterprise-grade modular application capable of **Star-Topology Multi-Node** connections, featuring a highly-decoupled EventBus architecture and an advanced Network Governance Engine.
+## 🚀 Overview
 
-## ✨ Core Features
+**Albireo** is an enterprise-grade Peer-to-Peer (P2P) communication platform that operates entirely without centralized servers. Built upon a custom WebRTC Mesh architecture and secured by Ed25519 cryptography, Albireo provides unbreakable, low-latency audio/video communication, file transfers, and a revolutionary decentralized governance system.
 
-### 🛡️ Unbreakable P2P Networking
-- **Zero-Server Architecture**: WebRTC data channels and media tracks form a star-topology mesh directly between the Host and Clients. No central server stores your data.
-- **Ed25519 Cryptography**: Every chat, vote, and command is cryptographically signed using `PyNaCl`. Network spoofing and replay attacks are physically impossible.
-
-### 🎙️ High-Fidelity Audio & Video
-- **Dynamic Jitter Buffer**: Custom audio mixer with elastic buffering ensures smooth audio playback even under high network latency.
-- **Peer-to-Peer Screen Sharing**: Granular, permission-based screen sharing. No forced takeovers.
-
-### 🏛️ Advanced Network Governance
-Albireo isn't just a chat app; it's a micro-society. The network creator chooses the governance model:
-- **Democracy Mode**: Peer moderation. Any node can initiate a vote to banish a malicious peer. Requires a >50% majority to execute the banishment.
-- **Archon Mode (Dictatorship)**: The Host acts as the absolute "Archon" with instant banish rights.
-  - **Heir Succession**: The Archon can designate an Heir. If the Archon disconnects, the Heir ascends seamlessly.
-  - **Chaos Election**: If the Archon disconnects without an Heir, the remaining nodes automatically trigger a decentralized election protocol to appoint the new Archon.
-
-### 💻 Cyberpunk UI Experience
-- Rendered in a high-performance GUI using `CustomTkinter`.
-- Neon-cyberpunk aesthetic (`#020205` deep space, `#00FFFF` cyan, `#FF00FF` magenta) with highly responsive modals, floating toasts, and real-time network graphs.
+Whether you're building a secure enclave for sensitive communications or experimenting with distributed systems, Albireo provides a resilient, anti-fragile foundation.
 
 ---
 
-## 🛠️ Architecture
+## 🌟 Core Features
 
-Albireo follows a strict **High Cohesion, Low Coupling** modular design:
-- **`utils/events.py`**: Global Singleton `EventBus`. The backbone of the application, decoupling the UI completely from the networking engine.
-- **`core/engine.py`**: The WebRTC state machine handling SDP signaling, ICE gathering, and DataChannels.
-- **`core/governance.py`**: The decentralized state machine handling the Democracy/Archon logic, syncs state across all connected nodes.
-- **`core/crypto.py`**: Local identity generation and payload signing/verification.
+### 🛡️ Unbreakable Cryptographic Identity
+- **Ed25519 Keypairs**: Every node operates on a uniquely generated private/public keypair.
+- **Zero-Trust Payload Signing**: Every single data packet (chat, file metadata, governance votes) is cryptographically signed. Spoofing or man-in-the-middle tampering is mathematically impossible and instantly dropped by the Core Gateway.
+
+### 🌐 Serverless WebRTC Mesh
+- **True Decentralization**: No signaling servers, no TURN/STUN middle-men. Connection is established via manual SDP out-of-band handshakes.
+- **Mesh Topology**: Nodes automatically orchestrate and discover each other, forming a resilient mesh network.
+- **Zlib + Base64 SDP Compression**: Handshake data is massively compressed to easily fit within chat applications for bootstrapping.
+
+### 🎙️ Unified Media Engine
+- **Global Audio Mixer**: Multi-channel raw PCM audio mixing with Jitter buffering and voice-activity detection (VAD).
+- **Push-to-Talk (PTT) & Open Mic**: Flexible hardware-bound microphone management.
+- **Screen Sharing**: High-framerate, dynamically scaled screen broadcasting to all peers.
+
+### 📜 Decentralized Governance & CRDT
+- **Democracy Mode**: Nodes can initiate a cryptographic "Vote Kick" against malicious peers. If 50% consensus is reached, the peer is banished network-wide.
+- **Archon Mode (Dictatorship)**: The room creator acts as the absolute authority (capable of kicking, disbanding rooms, and revoking screen share privileges).
+- **Automated Succession**: If the Archon disconnects, the network seamlessly transitions power to a designated heir. If no heir exists, a deterministic multi-round election initiates. Ties are resolved via cryptographic hash draws to ensure 100% network consensus without a central server.
+- **Immunity & Anti-Spam**: Built-in cooldowns and immunity windows prevent governance flooding and vote spam.
+
+### 📦 Modular Service Architecture
+- **Facade Pattern (`CoreAPI`)**: The entire complex networking and cryptographic layer is encapsulated behind a single, elegant `CoreAPI` gateway.
+- **Micro-Services**: Chat, File Transfer, Screen Sharing, and Voice Mixing are completely decoupled into distinct plugin-like services.
+- **AppRunner (Composition Root)**: Manages lifecycle, async event loops, and dependency injection, seamlessly bridging the CustomTkinter UI with underlying services.
+
+### 💾 Local Persistence & State
+- **SQLite Database**: Local state (contacts, cryptographic keys, and chat history) is persisted robustly via `albireo_state.db`.
+- **CRDT Foundation**: Network message deduplication and local state resolution serve as a robust foundation for CRDT (Conflict-free Replicated Data Type) synchronization, ensuring consistency across mesh peers.
 
 ---
 
-## 🚀 Getting Started
+## 🏗️ Architecture
 
-### Prerequisites
-- Python 3.9+
-- A working microphone and camera (for screen share).
+```text
+┌─────────────────────────────────────────────────────────────┐
+│                       CustomTkinter UI                      │
+└──────┬────────────────────────┬──────────────────────┬──────┘
+       │                        │                      │
+┌──────▼──────┐          ┌──────▼──────┐        ┌──────▼──────┐
+│ ChatManager │          │ FileTransfer│        │ GovManager  │
+└──────┬──────┘          └──────┬──────┘        └──────┬──────┘
+       │                        │                      │
+       └────────────────────────┼──────────────────────┘
+                                │
+┌───────────────────────────────▼─────────────────────────────┐
+│                 CoreAPI (Facade & Gateway)                  │
+│  [Message Router] [Deduplication] [Auth Hook] [Media Hook]  │
+└──────┬───────────────────────────────────────────────┬──────┘
+       │                                               │
+┌──────▼────────┐                             ┌────────▼──────┐
+│ CryptoManager │                             │  WebRTCEngine │
+│   (Ed25519)   │                             │   (aiortc)    │
+└───────────────┘                             └───────────────┘
+```
 
-### Installation
+---
 
-1. Clone the repository:
-   ```bash
-   git clone https://github.com/yourusername/albireo-mesh.git
-   cd albireo-mesh
-   ```
+## 🛠️ Installation & Usage
 
-2. Install dependencies:
-   ```bash
-   pip install -r requirements.txt
-   ```
-   *(Dependencies include `aiortc`, `customtkinter`, `sounddevice`, `PyNaCl`, `numpy`, `av`, `Pillow`, `mss`)*
+### 1. Requirements
+- **OS**: Windows, macOS, or Linux
+- **Python**: 3.10 or higher
+- Conda (Recommended for managing binary dependencies like PyAV)
 
-### Usage
+### 2. Setup Environment
+```bash
+# Clone the repository
+git clone https://github.com/your-org/p2p-voice.git
+cd p2p-voice
 
-Launch the terminal:
+# Create conda environment
+conda create -n p2p python=3.10
+conda activate p2p
+
+# Install dependencies
+pip install customtkinter aiortc pynacl sounddevice numpy pillow av pystray
+```
+
+### 3. Launching Albireo
 ```bash
 python main.py
 ```
 
-1. **Host a Network**: Click "Initialize Node" as Host. The app will generate an SDP Offer. Share this encrypted base64 string with your friends via any secure out-of-band channel.
-2. **Join a Network**: Click "Connect to Node", paste the Host's SDP Offer, and generate your Answer. Send it back to the Host.
-3. **Communicate**: Once connected, voice chat is instant. Use the chat bar to send messages, or click on a peer's avatar to initiate Governance actions (Vote Kick / Assign Heir).
+### 4. How to Connect
+1. **Host a Network**: The first user clicks **"Initialize Node"**. The app generates an encrypted, compressed SDP Offer string.
+2. **Out-of-Band Handshake**: Send this string to your peer via any secure channel (Telegram, Signal, Discord).
+3. **Join Network**: The peer clicks **"Connect to Node"**, pastes the Offer, and generates an Answer.
+4. **Finalize**: The peer sends the Answer back to the Host, who completes the WebRTC handshake. You are now connected in a secure P2P mesh!
 
 ---
 
 ## 🤝 Contributing
-Pull requests are welcome. For major architectural changes, please open an issue first to discuss what you would like to change. Ensure all Pub/Sub events adhere to the defined `EventBus` payloads.
+
+Contributions to the Albireo project are highly encouraged. Due to the strict Facade architecture, adding new decentralized features is incredibly simple.
+
+1. Create a new module inside `services/`.
+2. Register a message handler with `CoreAPI`.
+3. Use `CoreAPI.broadcast_message()` to distribute your state.
+
+Please ensure all new features pass the cryptographic signature tests before submitting a PR.
+
+---
 
 ## 📄 License
-[MIT](https://choosealicense.com/licenses/mit/)
+
+This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.

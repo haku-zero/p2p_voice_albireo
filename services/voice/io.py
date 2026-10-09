@@ -247,6 +247,9 @@ class MicrophoneTrack(MediaStreamTrack):
             if self.on_level_callback:
                 self.on_level_callback(rms)
                 
+            if getattr(self, 'on_frame_callback', None):
+                self.on_frame_callback(data)
+                
             # 这里是修复长度不匹配的关键！
             expected_len = self.samples_per_frame * 2
             if len(data) != expected_len:

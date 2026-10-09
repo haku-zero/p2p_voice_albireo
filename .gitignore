@@ -4,3 +4,4 @@ test/
 settings.json
 debug.log
 .DS_Store
+*.db

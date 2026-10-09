@@ -1,50 +1,26 @@
 import threading
-import asyncio
 import customtkinter as ctk
 import pystray
 from PIL import Image, ImageDraw
 from utils import config
-from core.audio_io import get_audio_devices, MicrophoneTrack, PlaybackManager
-from core.engine import WebRTCEngine
-from ui import UIManager
 from ui.theme import *
 from utils.i18n import get_text as _T
 
-class AppRunner(ctk.CTk):
-    def __init__(self):
+class MainWindow(ctk.CTk):
+    """
+    Main Application Window.
+    Handles top-level window rendering, system tray, and the login flow UI.
+    """
+    def __init__(self, enter_room_callback, quit_callback):
         super().__init__()
+        self.enter_room_callback = enter_room_callback
+        self.quit_callback = quit_callback
         self.title("Albireo")
         self.geometry("850x680")
         self.protocol("WM_DELETE_WINDOW", self.on_closing)
         self.tray_icon = None
-        
-        self.loop = asyncio.new_event_loop()
-        threading.Thread(target=self._run_async_loop, daemon=True).start()
-        
-        self.inputs_map, self.outputs_map = get_audio_devices()
-        self.playback_mgr = PlaybackManager()
-        self.local_mic = MicrophoneTrack(self.playback_mgr)
-        
-        self.engine = WebRTCEngine(self.local_mic, self.playback_mgr, self.loop)
-        
-        self.ui_ctrl = UIManager(self, self.engine, self.inputs_map, self.outputs_map, 
-                                    self.local_mic, self.playback_mgr, self.loop)
-        
         self.local_id = "User"
-
-    def start(self):
-        self.show_id_selection()
-        self.mainloop()
-
-    def _run_async_loop(self):
-        asyncio.set_event_loop(self.loop)
-        self.loop.run_forever()
-
-        from utils.events import event_bus
-        event_bus.on("all_disconnected", lambda: self.after(0, self.handle_all_disconnected))
-    def handle_all_disconnected(self):
-        self.engine.reset()
-        self.ui_ctrl.reset_room()
+        self.callsign = "User"
 
     def show_id_selection(self):
         for widget in self.winfo_children():
@@ -82,33 +58,15 @@ class AppRunner(ctk.CTk):
         uid = self.id_entry.get().strip()
         if not uid: return
         self.callsign = uid
-        self.engine.callsign = uid
-        self.engine.callsign_map[self.engine.local_id] = uid
-        self.local_id = self.engine.local_id
         config.save_config("local_id", uid)
-        self.enter_room('node')
-
-    def show_role_selection(self):
-        pass
-
-
-    def enter_room(self, role):
-        for widget in self.winfo_children():
-            widget.destroy()
-            
-        self.configure(fg_color=BG_COLOR)
-        self.ui_ctrl.build_top_bar()
-        work_frame = ctk.CTkFrame(self, fg_color="transparent")
-        work_frame.pack(fill="both", expand=True, padx=10, pady=10)
-        
-        self.ui_ctrl.build_node_ui(work_frame)
+        self.enter_room_callback(uid)
 
     def on_closing(self):
         cfg = config.load_config()
         saved_action = cfg.get("close_action")
         
         if saved_action == "close":
-            self._real_quit()
+            self.quit_callback()
             return
         elif saved_action == "minimize":
             self.hide_window()
@@ -134,7 +92,7 @@ class AppRunner(ctk.CTk):
             if remember_var.get():
                 config.save_config("close_action", "close")
             dialog.destroy()
-            self._real_quit()
+            self.quit_callback()
             
         def do_minimize():
             if remember_var.get():
@@ -164,11 +122,4 @@ class AppRunner(ctk.CTk):
 
     def quit_window(self, icon, item):
         icon.stop()
-        self.after(0, self._real_quit)
-
-    def _real_quit(self):
-        self.engine.shutdown()
-        self.playback_mgr.shutdown()
-        if hasattr(self, 'loop') and self.loop.is_running():
-            self.loop.call_soon_threadsafe(self.loop.stop)
-        self.destroy()
+        self.after(0, self.quit_callback)

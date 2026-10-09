@@ -30,6 +30,13 @@ class DynamicVideoTrack(VideoStreamTrack):
             self.sct.close()
             self.sct = None
         print("[Video] Screen sharing stopped.")
+        
+    def toggle_sharing(self):
+        if self.sharing:
+            self.stop_share()
+        else:
+            self.start_share()
+        return self.sharing
 
     async def recv(self):
         pts, time_base = await self.next_timestamp()

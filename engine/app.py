@@ -45,13 +45,17 @@ class AppRunner:
         from services.screen_share.sfu import SFUVideoManager
         self.sfu_video_mgr = SFUVideoManager(self.loop)
         
+        self.host_video_task = None
         async def _host_video_viewer():
-            while True:
-                await asyncio.sleep(1.0 / 15.0)
-                if getattr(self.core_api._engine, "is_host", False):
-                    grid = self.sfu_video_mgr.get_composited_canvas()
-                    event_bus.emit("video_frame", "host_mcu", grid)
-        self.loop.create_task(_host_video_viewer())
+            try:
+                while True:
+                    await asyncio.sleep(1.0 / 15.0)
+                    if getattr(self.core_api._engine, "is_host", False):
+                        grid = self.sfu_video_mgr.get_composited_canvas()
+                        event_bus.emit("video_frame", "host_mcu", grid)
+            except asyncio.CancelledError:
+                pass
+        self.host_video_task = self.loop.create_task(_host_video_viewer())
         
         def on_sfu_migration(new_host_id):
             if self.core_api.local_id == new_host_id:
@@ -90,9 +94,9 @@ class AppRunner:
 
     def _run_async_loop(self):
         asyncio.set_event_loop(self.loop)
-        self.loop.run_forever()
         event_bus.on("all_disconnected", lambda: self.root.after(0, self.handle_all_disconnected))
         event_bus.on("room_ended_by_archon", lambda: self.root.after(0, self.handle_room_ended))
+        self.loop.run_forever()
 
     def handle_room_ended(self):
         event_bus.emit("toast", "Room forcibly disbanded by Archon.")
@@ -118,15 +122,15 @@ class AppRunner:
         if role == 'host':
             from services.voice.mixer import NMinusOneMixerTrack
             self.core_api._engine.is_host = True
-            self.core_api._engine.local_track_factories.append(
-                lambda peer_id: NMinusOneMixerTrack(peer_id, self.global_mixer)
-            )
-            self.core_api._engine.local_track_factories.append(
+            self.core_api._engine.local_track_factories = [
+                lambda peer_id: NMinusOneMixerTrack(peer_id, self.global_mixer),
                 lambda peer_id: self.sfu_video_mgr.create_client_track()
-            )
+            ]
         else:
-            self.core_api._engine.local_tracks.append(self.local_mic)
-            self.core_api._engine.local_tracks.append(self.local_video)
+            if self.local_mic not in self.core_api._engine.local_tracks:
+                self.core_api._engine.local_tracks.append(self.local_mic)
+            if self.local_video not in self.core_api._engine.local_tracks:
+                self.core_api._engine.local_tracks.append(self.local_video)
             
         self.root.configure(fg_color=BG_COLOR)
         self.ui_ctrl.build_top_bar()
@@ -142,6 +146,20 @@ class AppRunner:
         self.core_api.reset_node()
         self.playback_mgr.shutdown()
         self.global_mixer.stop()
+        if hasattr(self, 'local_video') and getattr(self.local_video, 'sharing', False):
+            self.local_video.stop_share()
         if hasattr(self, 'loop') and self.loop.is_running():
-            self.loop.call_soon_threadsafe(self.loop.stop)
+            async def _cleanup_loop():
+                tasks = [t for t in asyncio.all_tasks(self.loop) if t is not asyncio.current_task()]
+                for t in tasks:
+                    t.cancel()
+                if tasks:
+                    await asyncio.gather(*tasks, return_exceptions=True)
+                self.loop.stop()
+                
+            future = asyncio.run_coroutine_threadsafe(_cleanup_loop(), self.loop)
+            try:
+                future.result(timeout=2.0)
+            except Exception:
+                pass
         self.root.destroy()

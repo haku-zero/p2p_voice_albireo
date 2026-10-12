@@ -136,6 +136,14 @@ class MicrophoneTrack(MediaStreamTrack):
         self.channels = 1
         self.stream_lock = threading.Lock()
         
+        # Smart VAD & Noise Gate 2.0 (Dual-threshold Hysteresis + Hangover Time)
+        self.vad_enabled = True
+        self.vad_attack_threshold = 450.0   # RMS threshold to trigger speech
+        self.vad_release_threshold = 220.0  # RMS threshold below which hangover countdown starts
+        self.vad_hangover_frames = 15      # 15 frames * 20ms = 300ms natural tail retention
+        self._hangover_counter = 0
+        self._voice_active = False
+        
         # 使用 Queue 和 Callback 模式彻底解决底层阻塞漏线程问题
         self._audio_queue = queue.Queue(maxsize=10)
         
@@ -192,6 +200,49 @@ class MicrophoneTrack(MediaStreamTrack):
         self.device_index = idx
         self.open_stream()
 
+    def process_audio_frame(self, data):
+        """
+        Processes a raw PCM frame: calculates RMS, applies VAD hysteresis & hangover,
+        and returns (processed_data, rms, is_active).
+        """
+        raw_rms = 0.0
+        if len(data) > 0:
+            raw_arr = np.frombuffer(data, dtype=np.int16).astype(np.float32)
+            raw_rms = float(np.sqrt(np.mean(raw_arr**2)))
+
+        is_silenced = False
+        if self.muted:
+            is_silenced = True
+            self._voice_active = False
+            self._hangover_counter = 0
+        elif self.vad_enabled:
+            if raw_rms >= self.vad_attack_threshold:
+                self._voice_active = True
+                self._hangover_counter = self.vad_hangover_frames
+            elif self._voice_active:
+                if raw_rms >= self.vad_release_threshold:
+                    self._hangover_counter = self.vad_hangover_frames
+                else:
+                    self._hangover_counter -= 1
+                    if self._hangover_counter <= 0:
+                        self._voice_active = False
+            if not self._voice_active:
+                is_silenced = True
+        elif self.noise_gate_threshold > 0 and raw_rms < self.noise_gate_threshold:
+            is_silenced = True
+
+        if is_silenced:
+            data = b'\x00' * (self.samples_per_frame * 2)
+            rms = 0.0
+        else:
+            rms = raw_rms
+            if self.volume != 1.0 and len(data) > 0:
+                arr = np.frombuffer(data, dtype=np.int16).astype(np.float32)
+                arr = np.clip(arr * self.volume, -32768, 32767).astype(np.int16)
+                data = arr.tobytes()
+
+        return data, rms, self._voice_active
+
     async def recv(self):
         loop = asyncio.get_event_loop()
         
@@ -221,28 +272,7 @@ class MicrophoneTrack(MediaStreamTrack):
                     print(f"Downmix Error: {e}")
                     data = b'\x00' * (self.samples_per_frame * 2)
                 
-            is_silenced = False
-            
-            # 麦克风物理静音 (按住说话模式也会通过此变量控制)
-            if self.muted:
-                is_silenced = True
-                
-            # 噪音门限
-            elif self.noise_gate_threshold > 0 and len(data) > 0:
-                arr = np.frombuffer(data, dtype=np.int16).astype(np.float32)
-                rms = np.sqrt(np.mean(arr**2))
-                if rms < self.noise_gate_threshold:
-                    is_silenced = True
-                    
-            if is_silenced:
-                data = b'\x00' * (self.samples_per_frame * 2)
-                rms = 0.0
-            else:
-                arr = np.frombuffer(data, dtype=np.int16).astype(np.float32)
-                rms = np.sqrt(np.mean(arr**2))
-                if self.volume != 1.0:
-                    arr = np.clip(arr * self.volume, -32768, 32767).astype(np.int16)
-                    data = arr.tobytes()
+            data, rms, _ = self.process_audio_frame(data)
                     
             if self.on_level_callback:
                 self.on_level_callback(rms)

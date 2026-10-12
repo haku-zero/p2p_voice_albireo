@@ -15,6 +15,7 @@ class CoreAPI:
         self.crypto = crypto
         self.local_id = self.crypto.get_public_key()
         self._engine.local_id = self.local_id
+        self._engine.crypto = self.crypto
         
         self.callsign = "Unknown"
         self._engine.callsign = self.callsign

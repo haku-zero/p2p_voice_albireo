@@ -1,7 +1,14 @@
 import asyncio
+import secrets
 import customtkinter as ctk
 from utils.i18n import get_text as _T
 from ui.theme import *
+
+def generate_secure_room_code():
+    charset = "23456789ABCDEFGHJKLMNPQRSTUVWXYZ"
+    part1 = "".join(secrets.choice(charset) for _ in range(4))
+    part2 = "".join(secrets.choice(charset) for _ in range(4))
+    return f"{part1}-{part2}"
 
 def copy_to_clipboard(root, text, btn):
     root.clipboard_clear()
@@ -40,19 +47,31 @@ class HostWizard:
         
         # --- AUTO MODE ---
         ctk.CTkLabel(tab_auto, text="Share this Room Code with your peers:", font=FONT_BOLD, text_color=PRIMARY).pack(pady=(30, 10))
-        room_var = ctk.StringVar()
-        room_entry = ctk.CTkEntry(tab_auto, textvariable=room_var, width=250, font=("Inter", 24, "bold"), justify="center", placeholder_text="e.g. 8899")
-        room_entry.pack(pady=10)
+        room_var = ctk.StringVar(value=generate_secure_room_code())
+        
+        code_box = ctk.CTkFrame(tab_auto, fg_color="transparent")
+        code_box.pack(pady=10)
+        
+        room_entry = ctk.CTkEntry(code_box, textvariable=room_var, width=200, font=("Consolas", 20, "bold"), justify="center", fg_color=FRAME_COLOR, border_color=PRIMARY, text_color=PRIMARY)
+        room_entry.pack(side="left", padx=5)
+        
+        copy_code_btn = ctk.CTkButton(code_box, text=_T("copy_key"), width=80, font=FONT_BOLD, corner_radius=0, fg_color="transparent", border_width=1, border_color=PRIMARY, text_color=PRIMARY, hover_color=PRIMARY_HOV, command=lambda: copy_to_clipboard(self.root, room_var.get(), copy_code_btn))
+        copy_code_btn.pack(side="left", padx=5)
+        
+        refresh_btn = ctk.CTkButton(code_box, text="⟳", width=40, font=FONT_BOLD, corner_radius=0, fg_color="transparent", border_width=1, border_color=SECONDARY, text_color=SECONDARY, hover_color=SECONDARY_HOV, command=lambda: room_var.set(generate_secure_room_code()))
+        refresh_btn.pack(side="left", padx=5)
         
         auto_status_lbl = ctk.CTkLabel(tab_auto, text="Waiting to start...", font=FONT_MAIN, text_color=BORDER_COLOR)
         auto_status_lbl.pack(pady=20)
         
-        btn_host = ctk.CTkButton(tab_auto, text="Start Listening", font=FONT_BOLD, corner_radius=0, fg_color="transparent", border_width=1, border_color=SUCCESS, text_color=SUCCESS, hover_color="#004433")
+        btn_host = ctk.CTkButton(tab_auto, text="Start Listening", font=FONT_BOLD, corner_radius=0, fg_color="transparent", border_width=1, border_color=SUCCESS, text_color=SUCCESS, hover_color=SUCCESS_HOV)
         btn_host.pack(pady=10)
         
         def start_host_auto():
-            room_code = room_var.get().strip()
-            if not room_code: return
+            room_code = room_var.get().strip().upper()
+            if not room_code or len(room_code.replace("-", "")) < 4:
+                auto_status_lbl.configure(text="Invalid Room Code (min 4 characters)", text_color=DANGER)
+                return
             
             btn_host.configure(state="disabled")
             auto_status_lbl.configure(text="Listening for peers on MQTT...", text_color=SUCCESS)
@@ -151,7 +170,7 @@ class ClientWizard:
         # --- AUTO MODE ---
         ctk.CTkLabel(tab_auto, text="Enter the Room Code to join:", font=FONT_BOLD, text_color=PRIMARY).pack(pady=(30, 10))
         room_var = ctk.StringVar()
-        room_entry = ctk.CTkEntry(tab_auto, textvariable=room_var, width=250, font=("Inter", 24, "bold"), justify="center", placeholder_text="e.g. 8899")
+        room_entry = ctk.CTkEntry(tab_auto, textvariable=room_var, width=250, font=("Consolas", 20, "bold"), justify="center", placeholder_text="e.g. 8A7K-9MF2", fg_color=FRAME_COLOR, border_color=SECONDARY, text_color=TEXT_COLOR)
         room_entry.pack(pady=10)
         
         auto_status_lbl = ctk.CTkLabel(tab_auto, text="Ready to connect...", font=FONT_MAIN, text_color=BORDER_COLOR)
@@ -161,8 +180,10 @@ class ClientWizard:
         btn_client.pack(pady=10)
         
         def start_client_auto():
-            room_code = room_var.get().strip()
-            if not room_code: return
+            room_code = room_var.get().strip().upper()
+            if not room_code or len(room_code.replace("-", "")) < 4:
+                auto_status_lbl.configure(text="Invalid Room Code (min 4 characters)", text_color=DANGER)
+                return
             
             btn_client.configure(state="disabled")
             auto_status_lbl.configure(text="Generating cryptographic offer...", text_color=SECONDARY)
@@ -207,7 +228,7 @@ class ClientWizard:
         answer_box = ctk.CTkTextbox(tab_manual, height=60, corner_radius=0, fg_color=FRAME_COLOR, border_color=PRIMARY, border_width=1, text_color=TEXT_COLOR, font=FONT_MAIN)
         answer_box.pack(fill="x", padx=10, pady=5)
         
-        conn_btn = ctk.CTkButton(tab_manual, text=_T("finalize"), font=FONT_BOLD, corner_radius=0, fg_color="transparent", border_width=1, border_color=SUCCESS, text_color=SUCCESS, hover_color="#004433")
+        conn_btn = ctk.CTkButton(tab_manual, text=_T("finalize"), font=FONT_BOLD, corner_radius=0, fg_color="transparent", border_width=1, border_color=SUCCESS, text_color=SUCCESS, hover_color=SUCCESS_HOV)
         conn_btn.pack(pady=15)
         
         status_lbl = ctk.CTkLabel(tab_manual, text=_T("await_input"), font=FONT_MAIN, text_color=BORDER_COLOR)
@@ -241,3 +262,94 @@ class ClientWizard:
 
         gen_btn.configure(command=gen)
         conn_btn.configure(command=conn)
+
+
+class VoteModal:
+    """
+    驱逐投票弹窗 (Banishment Vote Proposal Modal)。
+    """
+    def __init__(self, root, gov_api, callsign_map):
+        self.root = root
+        self.gov_api = gov_api
+        self.callsign_map = callsign_map
+
+    def open(self, target, vote_id):
+        modal = ctk.CTkToplevel(self.root)
+        modal.title("BANISH PROPOSAL")
+        modal.geometry("400x200")
+        modal.transient(self.root)
+        modal.attributes("-topmost", True)
+        modal.configure(fg_color=DANGER)
+        
+        def flash():
+            if modal.winfo_exists():
+                current = modal.cget("fg_color")
+                modal.configure(fg_color=BG_COLOR if current == DANGER else DANGER)
+                self.root.after(500, flash)
+        flash()
+        
+        main_frame = ctk.CTkFrame(modal, fg_color=BG_COLOR, corner_radius=0, border_width=2, border_color=DANGER)
+        main_frame.pack(fill="both", expand=True, padx=5, pady=5)
+        
+        csign = self.callsign_map.get(target, target[:8])
+        ctk.CTkLabel(main_frame, text=f"[ BANISH_PROPOSAL: {csign} ]", font=FONT_TITLE, text_color=DANGER).pack(pady=(20, 10))
+        
+        time_left = ctk.IntVar(value=60)
+        lbl_timer = ctk.CTkLabel(main_frame, textvariable=time_left, font=FONT_BOLD, text_color=PRIMARY)
+        lbl_timer.pack()
+        
+        btn_frame = ctk.CTkFrame(main_frame, fg_color="transparent")
+        btn_frame.pack(pady=20)
+        
+        def cast(choice):
+            self.gov_api.cast_vote(target, vote_id, choice)
+            if modal.winfo_exists():
+                modal.destroy()
+            
+        ctk.CTkButton(btn_frame, text="YES", fg_color="transparent", border_width=1, border_color=SUCCESS, text_color=SUCCESS, hover_color=SUCCESS_HOV, width=80, corner_radius=0, command=lambda: cast("yes")).pack(side="left", padx=10)
+        ctk.CTkButton(btn_frame, text="NO", fg_color="transparent", border_width=1, border_color=DANGER, text_color=DANGER, hover_color=DANGER_HOV, width=80, corner_radius=0, command=lambda: cast("no")).pack(side="left", padx=10)
+        
+        def tick():
+            if not modal.winfo_exists(): return
+            t = time_left.get() - 1
+            if t <= 0:
+                modal.destroy()
+            else:
+                time_left.set(t)
+                self.root.after(1000, tick)
+        tick()
+
+
+class ElectionModal:
+    """
+    执政官无中心选举弹窗 (Archon Election Modal)。
+    """
+    def __init__(self, root, gov_api, callsign_map):
+        self.root = root
+        self.gov_api = gov_api
+        self.callsign_map = callsign_map
+
+    def open(self, round_num, candidates):
+        modal = ctk.CTkToplevel(self.root)
+        modal.title("ARCHON ELECTION")
+        modal.geometry("400x400")
+        modal.transient(self.root)
+        modal.attributes("-topmost", True)
+        modal.configure(fg_color=BG_COLOR)
+        
+        main_frame = ctk.CTkFrame(modal, fg_color=FRAME_COLOR, corner_radius=0, border_width=2, border_color=PRIMARY)
+        main_frame.pack(fill="both", expand=True, padx=5, pady=5)
+        
+        ctk.CTkLabel(main_frame, text=f"[ ELECTION ROUND {round_num} ]", font=FONT_TITLE, text_color=PRIMARY).pack(pady=(20, 10))
+        
+        scroll = ctk.CTkScrollableFrame(main_frame, fg_color="transparent")
+        scroll.pack(fill="both", expand=True, padx=20, pady=10)
+        
+        def vote_for(cand):
+            self.gov_api.cast_election_vote(cand)
+            if modal.winfo_exists():
+                modal.destroy()
+            
+        for cand in candidates:
+            csign = self.callsign_map.get(cand, cand[:8])
+            ctk.CTkButton(scroll, text=csign, font=FONT_BOLD, fg_color="transparent", border_width=1, border_color=SECONDARY, text_color=SECONDARY, hover_color=SECONDARY_HOV, command=lambda c=cand: vote_for(c)).pack(pady=5, fill="x")

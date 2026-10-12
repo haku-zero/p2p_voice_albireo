@@ -17,6 +17,11 @@ class AppStore:
     def subscribe(self, callback):
         """Callback receives (state_dict) on every mutation."""
         self._subscribers.append(callback)
+
+    def unsubscribe(self, callback):
+        """Unsubscribe a previously registered callback."""
+        if callback in self._subscribers:
+            self._subscribers.remove(callback)
         
     def get_state(self):
         return self._state
@@ -40,6 +45,12 @@ class AppStore:
             pid = payload["peer_id"]
             if pid in self._state["members"]:
                 self._state["members"][pid]["status"] = "disconnected"
+                state_changed = True
+
+        elif action_type == "MEMBER_GHOST":
+            pid = payload["peer_id"]
+            if pid in self._state["members"]:
+                self._state["members"][pid]["status"] = "ghost" if payload.get("is_ghost", True) else "connected"
                 state_changed = True
                 
         elif action_type == "UPDATE_MEMBER_STATS":

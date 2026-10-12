@@ -66,6 +66,11 @@ class WebRTCEngine:
                 if rid != peer_id and ch and ch.readyState == "open":
                     ch.send(msg)
 
+    def handle_peer_ghost(self, peer_id, is_ghost):
+        """Called when peer enters or recovers from 15s Ghost Grace Period."""
+        from utils.events import event_bus
+        event_bus.emit("peer_ghost_state", peer_id, is_ghost)
+
     def handle_peer_disconnected(self, peer_id):
         if peer_id in self.data_channels:
             del self.data_channels[peer_id]
@@ -108,7 +113,20 @@ class WebRTCEngine:
                 await self.connections[sender].set_remote_description(sdp, sdp_type)
 
     # --- Manual Wizards ---
+    async def host_accept_offer(self, offer_b64, callback):
+        from core.signaling_wizard import SignalingWizard
+        wizard = SignalingWizard(self)
+        return await wizard.host_accept_offer(offer_b64, callback)
 
+    async def client_generate_offer(self, callback):
+        from core.signaling_wizard import SignalingWizard
+        wizard = SignalingWizard(self)
+        return await wizard.client_generate_offer(callback)
+
+    async def client_accept_answer(self, ans_b64, callback):
+        from core.signaling_wizard import SignalingWizard
+        wizard = SignalingWizard(self)
+        return await wizard.client_accept_answer(ans_b64, callback)
 
     # --- Lifecycle ---
     def shutdown(self):
@@ -128,4 +146,6 @@ class WebRTCEngine:
         self.shutdown()
         self.connections.clear()
         self.data_channels.clear()
+        self.local_tracks.clear()
+        self.local_track_factories.clear()
         self.is_host = False

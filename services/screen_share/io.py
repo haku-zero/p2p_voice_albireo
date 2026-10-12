@@ -25,6 +25,8 @@ class DynamicVideoTrack(VideoStreamTrack):
             print("[Video] mss not installed. Cannot share screen.")
             
     def stop_share(self):
+        if not self.sharing and not self.sct:
+            return
         self.sharing = False
         if self.sct:
             self.sct.close()
@@ -56,8 +58,15 @@ class DynamicVideoTrack(VideoStreamTrack):
         self.last_frame_time = time.time()
         
         try:
-            monitor = self.sct.monitors[1]
-            sct_img = self.sct.grab(monitor)
+            sct = self.sct
+            if not self.sharing or not sct:
+                await asyncio.sleep(0.5)
+                frame = VideoFrame.from_ndarray(self._black_img, format="bgr24")
+                frame.pts = pts
+                frame.time_base = time_base
+                return frame
+            monitor = sct.monitors[1]
+            sct_img = sct.grab(monitor)
             img = Image.frombytes("RGB", sct_img.size, sct_img.bgra, "raw", "BGRX")
             img.thumbnail((1280, 720), Image.Resampling.LANCZOS)
             arr = np.array(img)
@@ -65,8 +74,11 @@ class DynamicVideoTrack(VideoStreamTrack):
             frame.pts = pts
             frame.time_base = time_base
             return frame
+        except asyncio.CancelledError:
+            raise
         except Exception as e:
-            print(f"[Video] Capture error: {e}")
+            if self.sharing:
+                print(f"[Video] Capture error: {e}")
             await asyncio.sleep(1.0)
             frame = VideoFrame.from_ndarray(self._black_img, format="bgr24")
             frame.pts = pts

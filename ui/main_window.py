@@ -42,10 +42,10 @@ class MainWindow(ctk.CTk):
         # Language Selector
         lang_frame = ctk.CTkFrame(self, fg_color="transparent")
         lang_frame.pack(side="bottom", pady=20)
-        ctk.CTkLabel(lang_frame, text=_T("lang_label"), font=("Consolas", 12), text_color="#94A3B8").pack(side="left", padx=5)
+        ctk.CTkLabel(lang_frame, text=_T("lang_label"), font=FONT_MAIN, text_color=TEXT_MUTED).pack(side="left", padx=5)
         
         current_lang = config.load_config().get("lang", "en")
-        lang_combo = ctk.CTkComboBox(lang_frame, values=["English", "中文"], width=100, font=("Consolas", 12), fg_color="#111726", border_color="#1E293B", button_color="#1E293B", text_color="#00F0FF")
+        lang_combo = ctk.CTkComboBox(lang_frame, values=["English", "中文"], width=110, font=FONT_MAIN, fg_color=FRAME_COLOR, border_color=BORDER_COLOR, button_color=BORDER_COLOR, button_hover_color=PRIMARY, text_color=PRIMARY)
         lang_combo.set("English" if current_lang == "en" else "中文")
         
         def change_lang(choice):
@@ -77,12 +77,12 @@ class MainWindow(ctk.CTk):
         dialog.geometry("400x180")
         dialog.transient(self)
         dialog.grab_set()
-        dialog.configure(fg_color="#090C15")
+        dialog.configure(fg_color=BG_COLOR)
         
-        ctk.CTkLabel(dialog, text=_T("term"), font=("Consolas", 15, "bold"), text_color="#FF003C").pack(pady=(20, 5))
+        ctk.CTkLabel(dialog, text=_T("term"), font=FONT_TITLE, text_color=DANGER).pack(pady=(20, 5))
         
         remember_var = ctk.BooleanVar(value=False)
-        chk = ctk.CTkCheckBox(dialog, text=_T("mem"), variable=remember_var, font=("Consolas", 11), fg_color="#00F0FF", border_color="#00F0FF", hover_color="#004455", text_color="#94A3B8")
+        chk = ctk.CTkCheckBox(dialog, text=_T("mem"), variable=remember_var, font=("Consolas", 11), fg_color=PRIMARY, border_color=PRIMARY, hover_color=PRIMARY_HOV, text_color=TEXT_MUTED)
         chk.pack(pady=(0, 15))
         
         btn_frame = ctk.CTkFrame(dialog, fg_color="transparent")
@@ -100,8 +100,8 @@ class MainWindow(ctk.CTk):
             dialog.destroy()
             self.hide_window()
             
-        ctk.CTkButton(btn_frame, text=_T("min"), corner_radius=2, font=("Consolas", 12), fg_color="transparent", border_width=1, border_color="#00F0FF", text_color="#00F0FF", hover_color="#004455", command=do_minimize, width=170).pack(side="left", padx=10)
-        ctk.CTkButton(btn_frame, text=_T("dest"), corner_radius=2, font=("Consolas", 12), fg_color="transparent", border_width=1, border_color="#FF003C", text_color="#FF003C", hover_color="#550011", command=do_close, width=170).pack(side="left", padx=10)
+        ctk.CTkButton(btn_frame, text=_T("min"), corner_radius=0, font=FONT_MAIN, fg_color="transparent", border_width=1, border_color=PRIMARY, text_color=PRIMARY, hover_color=PRIMARY_HOV, command=do_minimize, width=170).pack(side="left", padx=10)
+        ctk.CTkButton(btn_frame, text=_T("dest"), corner_radius=0, font=FONT_MAIN, fg_color="transparent", border_width=1, border_color=DANGER, text_color=DANGER, hover_color=DANGER_HOV, command=do_close, width=170).pack(side="left", padx=10)
 
     def hide_window(self):
         self.withdraw()

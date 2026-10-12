@@ -38,8 +38,8 @@ class ChatWindow:
             self.chat_entry.pack(side="left", fill="x", expand=True, padx=(0, 5))
             self.chat_entry.bind("<Return>", lambda e: self.send_chat_msg())
             
-            ctk.CTkButton(input_frame, text="[ TX ]", font=FONT_BOLD, corner_radius=0, width=50, fg_color="transparent", border_width=1, border_color=SUCCESS, text_color=SUCCESS, hover_color="#004433", command=self.send_chat_msg).pack(side="right")
-            ctk.CTkButton(input_frame, text="[ + ]", font=FONT_BOLD, corner_radius=0, width=40, fg_color="transparent", border_width=1, border_color="#F59E0B", text_color="#F59E0B", hover_color="#B45309", command=self.send_file_dialog).pack(side="right", padx=(0, 5))
+            ctk.CTkButton(input_frame, text="[ TX ]", font=FONT_BOLD, corner_radius=0, width=50, fg_color="transparent", border_width=1, border_color=SUCCESS, text_color=SUCCESS, hover_color=SUCCESS_HOV, command=self.send_chat_msg).pack(side="right")
+            ctk.CTkButton(input_frame, text="[ + ]", font=FONT_BOLD, corner_radius=0, width=40, fg_color="transparent", border_width=1, border_color=WARNING, text_color=WARNING, hover_color=WARNING_HOV, command=self.send_file_dialog).pack(side="right", padx=(0, 5))
             
             self.window.protocol("WM_DELETE_WINDOW", self.hide)
         else:

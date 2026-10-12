@@ -12,31 +12,40 @@ class SignalingWizard:
     async def host_accept_offer(self, offer_b64, callback):
         self.engine.is_host = True
         try:
-            sdp, sdp_type, remote_id = SignalingCodec.decode_payload(offer_b64)
+            crypto_mgr = getattr(self.engine, 'crypto', None)
+            sdp, sdp_type, remote_id = SignalingCodec.decode_payload(offer_b64, crypto_mgr=crypto_mgr)
             
+            if remote_id in self.engine.connections:
+                old_peer = self.engine.connections.pop(remote_id)
+                await old_peer.close()
             peer = PeerConnection(remote_id, self.engine.loop, self.engine)
             self.engine.connections[remote_id] = peer
             desc = await peer.create_answer(sdp, sdp_type)
             
-            ans_b64 = SignalingCodec.encode_offer(desc.sdp, desc.type, self.engine.local_id, self.engine.callsign)
+            ans_b64 = SignalingCodec.encode_offer(desc.sdp, desc.type, self.engine.local_id, self.engine.callsign, crypto_mgr=crypto_mgr)
             callback(ans_b64, remote_id, False)
         except Exception as e:
             callback(str(e), None, True)
 
     async def client_generate_offer(self, callback):
         try:
+            crypto_mgr = getattr(self.engine, 'crypto', None)
+            if 'host' in self.engine.connections:
+                old_peer = self.engine.connections.pop('host')
+                await old_peer.close()
             peer = PeerConnection('host', self.engine.loop, self.engine)
             self.engine.connections['host'] = peer
             desc = await peer.create_offer()
             
-            offer_b64 = SignalingCodec.encode_offer(desc.sdp, desc.type, self.engine.local_id, self.engine.callsign)
+            offer_b64 = SignalingCodec.encode_offer(desc.sdp, desc.type, self.engine.local_id, self.engine.callsign, crypto_mgr=crypto_mgr)
             callback(offer_b64, False)
         except Exception as e:
             callback(str(e), True)
 
     async def client_accept_answer(self, ans_b64, callback):
         try:
-            sdp, sdp_type, remote_id = SignalingCodec.decode_payload(ans_b64, "Host")
+            crypto_mgr = getattr(self.engine, 'crypto', None)
+            sdp, sdp_type, remote_id = SignalingCodec.decode_payload(ans_b64, "Host", crypto_mgr=crypto_mgr)
             
             if 'host' in self.engine.connections:
                 peer = self.engine.connections.pop('host')

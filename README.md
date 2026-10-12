@@ -166,7 +166,7 @@ sequenceDiagram
     A->>Relay: Publishes Answer (with signed DTLS fingerprint)
     Relay->>B: Delivers Answer
     B->>B: Verifies Answer signature, finalizes WebRTC handshake
-    Note over A,B: Direct P2P WebRTC data/media mesh established; relay goes idle
+    Note over A,B: Direct P2P WebRTC data/media mesh established (relay goes idle)
 ```
 
 1. **Host a Room**:

@@ -213,6 +213,39 @@ python main.py --headless --room 8F2A1C
 
 ---
 
+### 模式四：交互式终端命令行模式 (Interactive CLI Terminal)
+
+如果你希望在纯 SSH、无显示器 Linux/Windows 终端或极客控制台环境下使用 Albireo，可以使用全新推出的交互式 CLI 终端：
+
+```bash
+# 启动交互式控制台
+python main.py --cli
+
+# 或直接指定房间号与呼号启动
+python main.py --cli --room 8F2A1C --callsign Commander
+```
+
+在终端中支持以下交互式斜杠指令：
+- `/join <room_code>`：加入指定房间（自动同步房主历史消息）
+- `/host [room_code]`：主持创建新房间（可选 `archon` 或 `democracy` 模式）
+- `/say <message>` 或直接输入文本：发送端到端（E2EE）加密聊天消息
+- `/history [n|all]` 或 `/chats`：查看本地 SQLite 聊天历史记录（带时间戳 `[HH:MM:SS]` 与身份标注）
+- `/last` 或 `/latest`：查看全网最新一条接收或发送的消息及相对时间
+- `/sync`：主动向房主请求全量重新同步聊天室历史记录
+- `/members` 或 `/who`：列出房间内所有已连接的对等节点与呼号
+- `/status`：查看当前节点的公钥指纹、呼号、房间状态与网络拓扑
+- `/kick <peer_id>` / `/ban <peer_id>`：对指定节点发起民主投票或执政官直接驱逐
+- `/vote <peer_id> <yes|no>`：参与房间内的投票弹劾
+- `/heir <peer_id>`：执政官指定权力继承储君
+- `/clear [history]`：清空屏幕或清空本地聊天记录 (`/clear history`)
+- `/leave`：离开当前房间
+- `/quit` 或 `/exit`：退出 CLI 控制台
+
+> [!TIP]
+> **动态最新消息看板**：CLI 终端的输入提示符支持常驻最新消息摘要看板，格式为 `[📌 最新消息: HH:MM:SS Callsign]: Message preview`。当房间内任何节点发布新消息时，终端会自动刷新该看板，让您在输入时随时掌握最新动态。
+
+---
+
 ### 🎮 常用功能与交互指引
 
 #### 1. 麦克风与音频波形控制

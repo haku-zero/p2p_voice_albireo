@@ -214,6 +214,39 @@ python main.py --headless --room 8F2A1C
 
 ---
 
+### Mode 4: Interactive CLI Terminal Client
+
+For SSH sessions, headless environments, or terminal lovers:
+
+```bash
+# Start the interactive console
+python main.py --cli
+
+# Or launch directly with room code and callsign
+python main.py --cli --room 8F2A1C --callsign Commander
+```
+
+Supported interactive commands:
+- `/join <room_code>`: Join an existing room (auto-syncs chat history from Host)
+- `/host [room_code]`: Host a new room (`archon` or `democracy` mode)
+- `/say <message>` (or type text directly): Broadcast an E2EE encrypted message
+- `/history [n|all]` or `/chats`: Display chat history (formatted with timestamps `[HH:MM:SS]` and sender tags)
+- `/last` or `/latest`: Show the most recent message received or sent and relative elapsed time
+- `/sync`: Manually request full chat history re-sync from room host
+- `/members` or `/who`: List connected peers and callsigns
+- `/status`: Inspect public key identity, room info, and network state
+- `/kick <peer_id>` / `/ban <peer_id>`: Initiate vote-kick or archon ban
+- `/vote <peer_id> <yes|no>`: Vote on an active kick proposal
+- `/heir <peer_id>`: Designate an heir for governance succession
+- `/clear [history]`: Clear console screen or wipe local chat history (`/clear history`)
+- `/leave`: Disconnect and leave current room
+- `/quit` or `/exit`: Exit the CLI client
+
+> [!TIP]
+> **Dynamic Latest Message Banner**: The interactive CLI prompt continuously reflects the most recent message across the room: `[📌 最新消息: HH:MM:SS Callsign]: Message preview`. When a new message arrives from any node, the prompt live-refreshes to keep you informed.
+
+---
+
 ### 🎮 Interface Controls & Interactions
 
 #### 1. Audio Controls & Visualizer

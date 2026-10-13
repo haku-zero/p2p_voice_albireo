@@ -23,6 +23,16 @@ class GovernanceManager:
         self.immunity_list = {}
         self.active_votes = {}
 
+    @property
+    def is_archon(self):
+        if getattr(self, '_is_archon_override', None) is not None:
+            return self._is_archon_override
+        return self.network_mode == 'archon' and self.archon_id == self.core_api.get_local_id()
+
+    @is_archon.setter
+    def is_archon(self, val):
+        self._is_archon_override = val
+
     def is_banned(self, target_id):
         return target_id in self.banned_list
 

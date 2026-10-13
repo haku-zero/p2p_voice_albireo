@@ -72,8 +72,14 @@ class DaemonRunner:
         self.gov_api.state.is_archon = True
         self.gov_api.state.archon_id = self.core_api.local_id
         
-        relay = MQTTRelay(self.room_code, self.engine)
-        self.loop.create_task(relay.connect())
+        self.relay = MQTTRelay(self.room_code, self.core_api.local_id)
+        def on_offer(sdp_b64, sender):
+            def done(ans_str, remote_id, err):
+                if not err:
+                    self.relay.send_answer(sender, ans_str)
+            asyncio.run_coroutine_threadsafe(self.engine.host_accept_offer(sdp_b64, done), self.loop)
+        self.relay.on_offer_received = on_offer
+        self.relay.start()
         
         print("="*50)
         print(f"🚀 Albireo Headless SFU Daemon")
@@ -87,6 +93,8 @@ class DaemonRunner:
             self.loop.run_forever()
         except KeyboardInterrupt:
             print("\n[Daemon] Shutting down...")
-            self.loop.run_until_complete(self.engine.close())
+            if hasattr(self, 'relay') and self.relay:
+                self.relay.stop()
+            self.core_api.reset_node()
             self.global_mixer.stop()
             self.loop.close()

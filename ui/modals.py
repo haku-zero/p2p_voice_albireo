@@ -90,7 +90,8 @@ class HostWizard:
                 def done(ans_str, remote_id, err):
                     if err: return
                     self.relay.send_answer(sender, ans_str)
-                    self.root.after(0, lambda: auto_status_lbl.configure(text=f"Linked with {remote_id[:8]}!", text_color=SUCCESS))
+                    csign = self.engine.callsign_map.get(remote_id, remote_id[:8])
+                    self.root.after(0, lambda: auto_status_lbl.configure(text=f"Linked with {csign}!", text_color=SUCCESS))
                     if self.on_complete:
                         self.root.after(0, lambda: self.on_complete(remote_id))
                 asyncio.run_coroutine_threadsafe(self.engine.host_accept_offer(sdp_b64, done), self.loop)
@@ -194,9 +195,11 @@ class ClientWizard:
             self.relay.start()
             
             def on_answer(sdp_b64, sender):
-                self.root.after(0, lambda: auto_status_lbl.configure(text=f"Finalizing with {sender[:8]}...", text_color=SUCCESS))
+                self.root.after(0, lambda: auto_status_lbl.configure(text=f"Finalizing link...", text_color=SUCCESS))
                 def done(remote_id, err_msg):
                     if not err_msg:
+                        csign = self.engine.callsign_map.get(remote_id, remote_id[:8])
+                        self.root.after(0, lambda: auto_status_lbl.configure(text=f"Linked with {csign}!", text_color=SUCCESS))
                         if self.on_complete:
                             self.root.after(0, lambda: self.on_complete(remote_id))
                         self.relay.stop()

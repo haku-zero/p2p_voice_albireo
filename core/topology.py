@@ -23,6 +23,8 @@ class TopologyManager:
     def handle_roster_update(self, roster):
         """Called when a roster message is received from the current SFU."""
         self.active_roster = roster
+        from utils.events import event_bus
+        event_bus.emit("roster_updated", roster)
 
     async def _heartbeat_loop(self):
         """Host periodically broadcasts the connected peer list as a failover roster."""

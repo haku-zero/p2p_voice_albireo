@@ -3,6 +3,19 @@ import base64
 import zlib
 import re
 
+class SignalingPayload(tuple):
+    """
+    A 3-tuple (sdp, sdp_type, user_id) subclass that also retains callsign.
+    Unpacks as (sdp, sdp_type, user_id) for 100% backwards compatibility.
+    """
+    def __new__(cls, sdp, sdp_type, user_id, callsign=None):
+        instance = super().__new__(cls, (sdp, sdp_type, user_id))
+        instance.sdp = sdp
+        instance.sdp_type = sdp_type
+        instance.user_id = user_id
+        instance.callsign = callsign
+        return instance
+
 class SignalingCodec:
     """
     Handles encoding, decoding, and compressing of manual WebRTC 
@@ -45,6 +58,7 @@ class SignalingCodec:
             sdp = sdp_dict.get("sdp")
             sdp_type = sdp_dict.get("type")
             user_id = sdp_dict.get("user_id", default_user_id)
+            callsign = sdp_dict.get("callsign", user_id[:8])
             
             # Check Ed25519 signature & DTLS fingerprint if present
             signature = sdp_dict.get("signature")
@@ -82,7 +96,7 @@ class SignalingCodec:
                             )
                     print(f"[Crypto] SDP DTLS Fingerprint verified & bound to peer '{user_id[:8]}...'.")
                     
-            return sdp, sdp_type, user_id
+            return SignalingPayload(sdp, sdp_type, user_id, callsign=callsign)
         except Exception as e:
             raise ValueError(f"Failed to decode signaling payload: {e}")
             

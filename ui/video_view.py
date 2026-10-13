@@ -7,8 +7,14 @@ class VideoViewManager:
         self.root = root
         self.engine = engine
         self.video_windows = {}
+        self.dismissed_windows = set()
 
     def update_frame(self, peer_id, arr):
+        if arr is None or getattr(arr, "shape", (0,))[0] <= 2:
+            return
+        if peer_id in self.dismissed_windows:
+            return
+
         if peer_id not in self.video_windows:
             vw = ctk.CTkToplevel(self.root)
             csign = self.engine.callsign_map.get(peer_id, peer_id[:8])
@@ -22,6 +28,7 @@ class VideoViewManager:
             
             def on_close():
                 vw.destroy()
+                self.dismissed_windows.add(peer_id)
                 if peer_id in self.video_windows:
                     del self.video_windows[peer_id]
             vw.protocol("WM_DELETE_WINDOW", on_close)
@@ -48,6 +55,7 @@ class VideoViewManager:
         vw_state["label"].image = ctk_img
 
     def close_window(self, peer_id):
+        self.dismissed_windows.discard(peer_id)
         if peer_id in self.video_windows:
             if self.video_windows[peer_id]["window"].winfo_exists():
                 self.video_windows[peer_id]["window"].destroy()

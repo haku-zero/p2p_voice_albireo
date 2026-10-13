@@ -133,6 +133,10 @@ class GlobalAudioMixer:
         with self.lock:
             if len(arr) == 960:
                 self.local_mic_buffer = arr
+
+    def clear_local_mic(self):
+        with self.lock:
+            self.local_mic_buffer = np.zeros(960, dtype=np.float32)
                     
     def remove_source(self, source_id):
         with self.lock:

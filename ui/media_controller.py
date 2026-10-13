@@ -15,6 +15,11 @@ class MediaController:
     def toggle_mic(self):
         new_state = not self.local_mic.muted
         self.local_mic.muted = new_state
+        if new_state:
+            if hasattr(self.local_mic, "clear_buffers"):
+                self.local_mic.clear_buffers()
+            from utils.events import event_bus
+            event_bus.emit("local_mic_level", 0.0)
         store.dispatch("TOGGLE_MIC", new_state)
 
     def change_mic_volume(self, value):
@@ -27,14 +32,25 @@ class MediaController:
         # When entering PTT, mic should be muted by default.
         is_ptt = "ptt" in mode.lower() or "push" in mode.lower() or "按住" in mode
         self.local_mic.muted = is_ptt
+        if is_ptt:
+            if hasattr(self.local_mic, "clear_buffers"):
+                self.local_mic.clear_buffers()
+            from utils.events import event_bus
+            event_bus.emit("local_mic_level", 0.0)
         store.dispatch("TOGGLE_MIC", is_ptt)
         return "ptt" if is_ptt else "open"
 
     def handle_ptt(self, is_pressed):
         mode = config.load_config().get("mic_mode", "")
         if "ptt" in mode.lower() or "push" in mode.lower() or "按住" in mode:
-            self.local_mic.muted = not is_pressed
-            store.dispatch("TOGGLE_MIC", not is_pressed)
+            muted = not is_pressed
+            self.local_mic.muted = muted
+            if muted:
+                if hasattr(self.local_mic, "clear_buffers"):
+                    self.local_mic.clear_buffers()
+                from utils.events import event_bus
+                event_bus.emit("local_mic_level", 0.0)
+            store.dispatch("TOGGLE_MIC", muted)
 
     def toggle_speaker(self):
         new_state = not self.playback_mgr.muted

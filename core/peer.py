@@ -34,6 +34,12 @@ class PeerConnection:
         if self.force_relay:
             print(f"[PeerConnection:{self.peer_id}] Enforcing TURN Relay-only policy (Symmetric NAT fallback).")
             
+        if self.loop and not self.loop.is_closed():
+            try:
+                asyncio.set_event_loop(self.loop)
+            except Exception:
+                pass
+
         configuration = RTCConfiguration(iceServers=ice_servers)
         self.pc = RTCPeerConnection(configuration)
         

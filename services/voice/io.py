@@ -135,22 +135,25 @@ class MicrophoneTrack(MediaStreamTrack):
         self.noise_gate_threshold = 0
         self.channels = 1
         self.stream_lock = threading.Lock()
-        
-        # Smart VAD & Noise Gate 2.0 (Dual-threshold Hysteresis + Hangover Time)
+           # Smart VAD & Noise Gate 2.0 (Dual-threshold Hysteresis + Hangover Time)
         self.vad_enabled = True
-        self.vad_attack_threshold = 450.0   # RMS threshold to trigger speech
-        self.vad_release_threshold = 220.0  # RMS threshold below which hangover countdown starts
+        self.vad_attack_threshold = 300.0   # RMS threshold to trigger speech (was 450.0)
+        self.vad_release_threshold = 150.0  # RMS threshold below which hangover countdown starts (was 220.0)
         self.vad_hangover_frames = 15      # 15 frames * 20ms = 300ms natural tail retention
         self._hangover_counter = 0
         self._voice_active = False
         
-        # 使用 Queue 和 Callback 模式彻底解决底层阻塞漏线程问题
+        # Audio queues and continuous pump thread
         self._audio_queue = queue.Queue(maxsize=10)
+        self._webrtc_queue = queue.Queue(maxsize=10)
+        self._running = False
+        self._pump_thread = None
         
         self.open_stream()
 
     def open_stream(self):
         with self.stream_lock:
+            self._running = False
             if self.stream:
                 try:
                     self.stream.stop_stream()
@@ -167,8 +170,7 @@ class MicrophoneTrack(MediaStreamTrack):
                         pass
                 
                 info = pyaudio_instance.get_device_info_by_index(self.device_index) if self.device_index is not None else pyaudio_instance.get_default_input_device_info()
-                # 强制使用 48000 采样率！因为 WebRTC 的 Opus 编码器不支持 44100，会导致完全发不出声音！
-                # 即使麦克风硬件是 44100，PyAudio 也会在底层通过 PortAudio 自动帮我们重采样为 48000。
+                # 强制使用 48000 采样率
                 self.sample_rate = 48000
                 self.channels = min(int(info.get('maxInputChannels', 1)), 2)
                 if self.channels == 0: self.channels = 1
@@ -176,13 +178,21 @@ class MicrophoneTrack(MediaStreamTrack):
                 
                 # 清空队列
                 while not self._audio_queue.empty():
-                    self._audio_queue.get_nowait()
+                    try: self._audio_queue.get_nowait()
+                    except queue.Empty: break
+                while not self._webrtc_queue.empty():
+                    try: self._webrtc_queue.get_nowait()
+                    except queue.Empty: break
                 
                 def _audio_callback(in_data, frame_count, time_info, status):
                     try:
                         self._audio_queue.put_nowait(in_data)
                     except queue.Full:
-                        pass
+                        try:
+                            self._audio_queue.get_nowait()
+                            self._audio_queue.put_nowait(in_data)
+                        except:
+                            pass
                     return (None, pyaudio.paContinue)
                 
                 self.stream = pyaudio_instance.open(format=pyaudio.paInt16,
@@ -192,13 +202,38 @@ class MicrophoneTrack(MediaStreamTrack):
                                                     input_device_index=self.device_index,
                                                     frames_per_buffer=self.samples_per_frame,
                                                     stream_callback=_audio_callback)
+                self._running = True
+                self._pump_thread = threading.Thread(target=self._pump_worker, daemon=True)
+                self._pump_thread.start()
             except Exception as e:
                 print(f"Open Error: {e}")
             self.pts = 0
 
+    def close(self):
+        self._running = False
+        with self.stream_lock:
+            if self.stream:
+                try:
+                    self.stream.stop_stream()
+                    self.stream.close()
+                except: pass
+
     def change_device(self, idx):
         self.device_index = idx
         self.open_stream()
+
+    def clear_buffers(self):
+        """Flushes all queued audio to guarantee instant silence upon muting."""
+        while not self._audio_queue.empty():
+            try:
+                self._audio_queue.get_nowait()
+            except queue.Empty:
+                break
+        while not self._webrtc_queue.empty():
+            try:
+                self._webrtc_queue.get_nowait()
+            except queue.Empty:
+                break
 
     def process_audio_frame(self, data):
         """
@@ -243,44 +278,85 @@ class MicrophoneTrack(MediaStreamTrack):
 
         return data, rms, self._voice_active
 
-    async def recv(self):
-        loop = asyncio.get_event_loop()
-        
-        try:
-            # 从队列中提取数据，最多等待 0.05 秒。如果超时，说明 OS 根本没给数据！
-            def pop_queue():
-                try:
-                    return self._audio_queue.get(timeout=0.05)
-                except queue.Empty:
-                    return None
-                    
+    def _pump_worker(self):
+        """
+        Continuous real-time pump thread:
+        Pumps audio from PyAudio at 50Hz, calculates RMS, feeds local mic callbacks,
+        and enqueues frames for WebRTC. Runs independently of whether WebRTC is polling.
+        """
+        while self._running:
             try:
-                data = await loop.run_in_executor(None, pop_queue)
-                if data is None:
-                    data = b'\x00' * (self.samples_per_frame * 2 * self.channels)
-            except Exception as e:
-                print(f"Queue Read Error: {e}")
-                data = b'\x00' * (self.samples_per_frame * 2 * self.channels)
+                data = self._audio_queue.get(timeout=0.05)
+            except queue.Empty:
+                continue
+
+            if not self._running:
+                break
                 
+            if data is None:
+                continue
+
             # 立体声下混频到单声道
             if self.channels == 2 and len(data) > 0:
                 try:
                     arr = np.frombuffer(data, dtype=np.int16).reshape(-1, 2)
                     arr = arr.mean(axis=1).astype(np.int16)
                     data = arr.tobytes()
-                except Exception as e:
-                    print(f"Downmix Error: {e}")
+                except Exception:
                     data = b'\x00' * (self.samples_per_frame * 2)
-                
-            data, rms, _ = self.process_audio_frame(data)
-                    
+
+            raw_rms = 0.0
+            if len(data) > 0:
+                raw_arr = np.frombuffer(data, dtype=np.int16).astype(np.float32)
+                raw_rms = float(np.sqrt(np.mean(raw_arr**2)))
+
+            if self.muted:
+                level_to_report = 0.0
+                processed_data = b'\x00' * (self.samples_per_frame * 2)
+            else:
+                processed_data, rms, _ = self.process_audio_frame(data)
+                level_to_report = raw_rms
+
+            # 触发实时音量计量（静音时强制上报 0.0，避免视觉波形或电平表跳动）
             if self.on_level_callback:
-                self.on_level_callback(rms)
-                
+                try:
+                    self.on_level_callback(level_to_report)
+                except Exception:
+                    pass
+
+            # 触发本地帧回调（喂给 GlobalAudioMixer，静音时传递全 0 静音帧）
             if getattr(self, 'on_frame_callback', None):
-                self.on_frame_callback(data)
+                try:
+                    self.on_frame_callback(processed_data)
+                except Exception:
+                    pass
+
+            # 供 WebRTC recv() 消费
+            try:
+                self._webrtc_queue.put_nowait(processed_data)
+            except queue.Full:
+                try:
+                    self._webrtc_queue.get_nowait()
+                    self._webrtc_queue.put_nowait(processed_data)
+                except:
+                    pass
+
+    async def recv(self):
+        loop = asyncio.get_event_loop()
+        try:
+            def pop_queue():
+                try:
+                    return self._webrtc_queue.get(timeout=0.05)
+                except queue.Empty:
+                    return None
+                    
+            try:
+                data = await loop.run_in_executor(None, pop_queue)
+                if self.muted or data is None:
+                    data = b'\x00' * (self.samples_per_frame * 2)
+            except Exception as e:
+                data = b'\x00' * (self.samples_per_frame * 2)
                 
-            # 这里是修复长度不匹配的关键！
             expected_len = self.samples_per_frame * 2
             if len(data) != expected_len:
                 if len(data) > expected_len:

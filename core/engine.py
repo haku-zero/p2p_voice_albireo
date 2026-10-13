@@ -30,6 +30,7 @@ class WebRTCEngine:
         self.is_host = False
         self.local_id = "Unknown"
         self.callsign = "Unknown"
+        self.callsign_map = {}
 
     # --- Peer Delegation Callbacks ---
     def register_data_channel(self, peer_id, label, channel):
@@ -59,12 +60,18 @@ class WebRTCEngine:
             cb(peer_id, track)
 
     def handle_peer_connected(self, peer_id):
+        from utils.events import event_bus
+        event_bus.emit("status", peer_id, "connected")
         if self.is_host:
-            msg = json.dumps({"type": "peer_joined", "peer_id": peer_id})
+            csign = self.callsign_map.get(peer_id, peer_id[:8])
+            msg = json.dumps({"type": "peer_joined", "peer_id": peer_id, "callsign": csign})
             for rid, channels in self.data_channels.items():
                 ch = channels.get('control')
                 if rid != peer_id and ch and ch.readyState == "open":
-                    ch.send(msg)
+                    try:
+                        ch.send(msg)
+                    except Exception:
+                        pass
 
     def handle_peer_ghost(self, peer_id, is_ghost):
         """Called when peer enters or recovers from 15s Ghost Grace Period."""
@@ -76,9 +83,34 @@ class WebRTCEngine:
             del self.data_channels[peer_id]
         if peer_id in self.connections:
             del self.connections[peer_id]
+        if hasattr(self, 'global_mixer') and self.global_mixer:
+            self.global_mixer.remove_source(peer_id)
         for cb in self.on_peer_disconnected_callbacks:
-            cb(peer_id)
+            try:
+                cb(peer_id)
+            except Exception:
+                pass
             
+        from utils.events import event_bus
+        event_bus.emit("status", peer_id, "disconnected")
+        event_bus.emit("peer_left", peer_id)
+
+        if self.is_host:
+            if self.core_api_ref:
+                try:
+                    self.core_api_ref.broadcast_message({"type": "peer_left", "peer_id": peer_id})
+                except Exception:
+                    pass
+            else:
+                msg = json.dumps({"type": "peer_left", "peer_id": peer_id})
+                for rid, channels in list(self.data_channels.items()):
+                    ch = channels.get('control')
+                    if rid != peer_id and ch and ch.readyState == "open":
+                        try:
+                            ch.send(msg)
+                        except Exception:
+                            pass
+
         # [Failover Trigger]
         if not self.is_host and len(self.connections) == 0:
             if self.core_api_ref:

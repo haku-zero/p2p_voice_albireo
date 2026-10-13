@@ -65,17 +65,26 @@ class SFUVideoManager:
     def feed_local_frame(self, frame_arr):
         self.latest_frames["local"] = frame_arr
             
+    def has_active_video(self):
+        """Returns True if any video track is actively streaming real content."""
+        return any(v is not None and getattr(v, "shape", (0,))[0] > 2 for v in self.latest_frames.values())
+
     async def _consume(self, peer_id, track):
         try:
             while True:
                 frame = await track.recv()
-                self.latest_frames[peer_id] = frame.to_ndarray(format="bgr24")
+                arr = frame.to_ndarray(format="bgr24")
+                if arr.shape[0] > 2:
+                    self.latest_frames[peer_id] = arr
+                else:
+                    self.latest_frames.pop(peer_id, None)
         except Exception as e:
             print(f"[MCU] Video consumer err for {peer_id}: {e}")
+            self.latest_frames.pop(peer_id, None)
             
     def get_composited_canvas(self):
-        # 1. Gather active frames
-        active_frames = {k: v for k, v in self.latest_frames.items() if v is not None}
+        # 1. Gather active frames (filter out empty or 2x2 placeholder frames)
+        active_frames = {k: v for k, v in self.latest_frames.items() if v is not None and getattr(v, "shape", (0,))[0] > 2}
         n = len(active_frames)
         
         if n == 0:

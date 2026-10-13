@@ -1,5 +1,41 @@
 import threading
 
+class Events:
+    """
+    Standardized Event Names and Payload Contracts for Albireo EventBus.
+    See ARCHITECTURE.md Section 3 for full specifications.
+    """
+    # Network & Lifecycle
+    STATUS = "status"                          # (peer_id: str, status: "connected" | "disconnected")
+    PEER_LEFT = "peer_left"                    # (peer_id: str)
+    PEER_JOINED = "peer_joined"                # (peer_id: str)
+    PEER_GHOST_STATE = "peer_ghost_state"      # (peer_id: str, is_ghost: bool)
+    PEER_CALLSIGN_UPDATED = "peer_callsign_updated"  # (peer_id: str, callsign: str)
+    ROSTER_UPDATED = "roster_updated"          # (roster: list[str])
+    ALL_DISCONNECTED = "all_disconnected"      # ()
+    
+    # Audio & Hardware
+    LOCAL_MIC_LEVEL = "local_mic_level"        # (rms: float)
+    TALKING = "talking"                        # (peer_id: str, rms: float)
+    STATS = "stats"                            # (peer_id: str, ping: int)
+    
+    # Messaging & File Transfer
+    CHAT_MESSAGE = "chat_message"              # (sender_callsign: str, content: str)
+    FILE_INCOMING = "file_incoming"            # (peer_id: str, filename: str, size: int, file_id: str)
+    FILE_PROGRESS = "file_progress"            # (peer_id: str, progress: float, file_id: str)
+    FILE_DONE = "file_done"                    # (peer_id: str, filename: str, path: str, file_id: str)
+    
+    # Video & Screen Sharing
+    VIDEO_FRAME = "video_frame"                # (peer_id: str, arr: np.ndarray)
+    VIDEO_STOPPED = "video_stopped"            # (peer_id: str)
+    SFU_MIGRATION = "sfu_migration_triggered"  # (new_host_id: str)
+    
+    # Governance & Modals
+    VOTE_REQUESTED = "vote_requested"          # (target: str, vote_id: str)
+    ELECTION_REQUESTED = "election_requested"  # (round_num: int, candidates: list[str])
+    ROOM_ENDED = "room_ended_by_archon"        # ()
+    TOAST = "toast"                            # (message: str)
+
 class EventEmitter:
     _instance = None
     _lock = threading.Lock()

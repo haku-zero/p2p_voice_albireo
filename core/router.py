@@ -16,6 +16,12 @@ class MessageRouter:
                 meta = self.api._engine.meta_hook()
                 if meta:
                     self.api.send_on_channel(peer_id, label, meta)
+            # Send presence / callsign announcement
+            self.api.send_on_channel(peer_id, "control", {
+                "type": "presence",
+                "callsign": self.api.callsign,
+                "sender": self.api.local_id
+            })
                     
         # Expose generic channel open event if upper layers need it
         event_bus.emit("channel_opened", peer_id, label)
@@ -51,16 +57,30 @@ class MessageRouter:
                     
                 # 2. State Sync
                 if "callsign" in data and sender:
+                    old_callsign = self.api.callsign_map.get(sender)
                     self.api.callsign_map[sender] = data["callsign"]
                     self.api.db.save_contact(sender, data["callsign"])
+                    if old_callsign != data["callsign"]:
+                        event_bus.emit("peer_callsign_updated", sender, data["callsign"])
                     
                 # 3. Handle Internal Control / Signaling
                 if label == "control":
                     msg_type = data.get("type")
                     if msg_type == "peer_joined":
-                        # [SFU Topology] We no longer initiate a full mesh. 
-                        # All clients will rely on the Host (Archon) as the central SFU relay.
-                        pass
+                        joined_id = data.get("peer_id")
+                        if joined_id and joined_id != self.api.local_id:
+                            csign = data.get("callsign", joined_id[:8])
+                            if "callsign" in data:
+                                self.api.callsign_map[joined_id] = csign
+                            event_bus.emit("status", joined_id, "connected")
+                            
+                    elif msg_type == "peer_left":
+                        left_peer_id = data.get("peer_id") or sender
+                        if left_peer_id and left_peer_id != self.api.local_id:
+                            event_bus.emit("status", left_peer_id, "disconnected")
+                            event_bus.emit("peer_left", left_peer_id)
+                            if getattr(self.api._engine, "is_host", False) and left_peer_id in self.api._engine.connections:
+                                self.api.close_connection(left_peer_id)
                             
                     elif msg_type == "signaling":
                         target = data.get("target")

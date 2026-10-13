@@ -56,7 +56,23 @@ class UIManager:
         event_bus.on("toast", lambda msg: self.root.after(0, self.toast_mgr.show_toast, msg))
         event_bus.on("talking", lambda mid, rms: self.root.after(0, lambda: store.dispatch("UPDATE_MEMBER_STATS", {"peer_id": mid, "rms": rms})))
         event_bus.on("local_mic_level", lambda rms: self.root.after(0, lambda: store.dispatch("UPDATE_MEMBER_STATS", {"peer_id": self.root.local_id, "rms": rms})))
-        event_bus.on("status", lambda mid, st: self.root.after(0, lambda: store.dispatch("MEMBER_JOINED" if st == "connected" else "MEMBER_LEFT", {"peer_id": mid})))
+        def _on_status_change(mid, st):
+            if st == "connected":
+                csign = self.engine.callsign_map.get(mid, mid[:8])
+                store.dispatch("MEMBER_JOINED", {"peer_id": mid, "callsign": csign})
+            else:
+                store.dispatch("MEMBER_LEFT", {"peer_id": mid})
+        event_bus.on("status", lambda mid, st: self.root.after(0, _on_status_change, mid, st))
+
+        def _on_roster_updated(roster):
+            if not self.member_view:
+                return
+            roster_set = set(roster)
+            my_id = getattr(self.root, "local_id", None) or self.core_api.get_local_id()
+            for mid in list(store.get_state()["members"].keys()):
+                if mid != my_id and mid not in roster_set:
+                    store.dispatch("MEMBER_LEFT", {"peer_id": mid})
+        event_bus.on("roster_updated", lambda r: self.root.after(0, _on_roster_updated, r))
         event_bus.on("stats", lambda mid, ping: self.root.after(0, lambda: store.dispatch("UPDATE_MEMBER_STATS", {"peer_id": mid, "ping": ping})))
         event_bus.on("chat_message", lambda mid, msg: self.root.after(0, self.append_chat, msg, False, None, mid))
         event_bus.on("file_incoming", lambda mid, fn, sz, fid: self.root.after(0, self.add_file_transfer, mid, fn, sz, fid))
@@ -66,17 +82,32 @@ class UIManager:
         event_bus.on("election_requested", lambda rnd, cand: self.root.after(0, self.show_election_modal, rnd, cand))
         event_bus.on("peer_ghost_state", lambda mid, ghost: self.root.after(0, lambda: store.dispatch("MEMBER_GHOST", {"peer_id": mid, "is_ghost": ghost})))
         event_bus.on("video_frame", lambda pid, arr: self.root.after(0, self.video_mgr.update_frame, pid, arr))
+        event_bus.on("video_stopped", lambda pid: self.root.after(0, self.video_mgr.close_window, pid))
+        def _on_callsign_updated(mid, new_callsign):
+            if self.member_view:
+                self.member_view.update_callsign(mid, new_callsign)
+            store.dispatch("UPDATE_CALLSIGN", {"peer_id": mid, "callsign": new_callsign})
+        event_bus.on("peer_callsign_updated", lambda mid, cs: self.root.after(0, _on_callsign_updated, mid, cs))
 
     def _on_store_changed(self, state):
         """响应 Store 状态驱动 MemberView 与 VideoViewManager"""
         if self.member_view:
-            for pid, member in state["members"].items():
+            for pid, member in list(state["members"].items()):
                 status = member["status"]
+                if status == "connected" and pid not in self.member_view.member_labels:
+                    csign = member.get("callsign", pid[:8])
+                    my_id = getattr(self.root, "local_id", None) or self.core_api.get_local_id()
+                    if pid == my_id:
+                        self.member_view.add_member(pid, f"[ LOCAL_NODE ] {csign}")
+                    else:
+                        self.member_view.add_member(pid, f"> {csign} ({_T('established')})")
+
                 self.member_view.update_status(pid, status, self.toast_mgr.show_toast)
                 self.member_view.update_talking_state(pid, member["talking_rms"])
                 self.member_view.update_stats(pid, member["ping"])
                 if status == "disconnected":
                     self.video_mgr.close_window(pid)
+                    del state["members"][pid]
 
     def _on_chat_hidden(self):
         pass
@@ -151,6 +182,7 @@ class UIManager:
         
         self.member_view = MemberView(members_frame, gov_api=self.gov_api, local_id=self.core_api.get_local_id())
         self.member_view.add_member(self.root.local_id, f"[ LOCAL_NODE ] {self.engine.callsign}")
+        store.dispatch("MEMBER_JOINED", {"peer_id": self.root.local_id, "callsign": self.engine.callsign})
         
         # Load persisted chat history
         self.root.after(100, self.chat_mgr.load_history)
@@ -169,6 +201,10 @@ class UIManager:
 
     def exit_room(self):
         """退出当前房间，重置各模块状态"""
+        try:
+            self.core_api.broadcast_message({"type": "peer_left", "peer_id": self.core_api.local_id})
+        except Exception:
+            pass
         self.engine.reset()
         if self.chat_view:
             self.chat_view.destroy()
@@ -177,6 +213,7 @@ class UIManager:
         if self.top_bar:
             self.top_bar.destroy()
             self.top_bar = None
+        store.dispatch("RESET_ROOM")
         self.root.show_id_selection()
 
     def reset_room(self):

@@ -47,12 +47,19 @@ class AppRunner:
         
         self.host_video_task = None
         async def _host_video_viewer():
+            was_active = False
             try:
                 while True:
                     await asyncio.sleep(1.0 / 15.0)
                     if getattr(self.core_api._engine, "is_host", False):
-                        grid = self.sfu_video_mgr.get_composited_canvas()
-                        event_bus.emit("video_frame", "host_mcu", grid)
+                        is_active = self.sfu_video_mgr.has_active_video()
+                        if is_active:
+                            grid = self.sfu_video_mgr.get_composited_canvas()
+                            event_bus.emit("video_frame", "host_mcu", grid)
+                            was_active = True
+                        elif was_active:
+                            event_bus.emit("video_stopped", "host_mcu")
+                            was_active = False
             except asyncio.CancelledError:
                 pass
         self.host_video_task = self.loop.create_task(_host_video_viewer())
@@ -69,6 +76,7 @@ class AppRunner:
         def on_local_mic_frame(data):
             self.global_mixer.set_local_mic(data)
         self.local_mic.on_frame_callback = on_local_mic_frame
+        self.local_mic.on_level_callback = lambda rms: event_bus.emit("local_mic_level", rms)
         
         from services.media_router import MediaRouter
         self.media_router = MediaRouter(self.core_api, self.playback_mgr, self.global_mixer, self.sfu_video_mgr, self.loop)
@@ -142,6 +150,10 @@ class AppRunner:
         self.ui_ctrl.build_node_ui(work_frame)
 
     def _real_quit(self):
+        try:
+            self.core_api.broadcast_message({"type": "peer_left", "peer_id": self.core_api.local_id})
+        except Exception:
+            pass
         self.db.clear_chat_history()
         self.core_api.reset_node()
         self.playback_mgr.shutdown()

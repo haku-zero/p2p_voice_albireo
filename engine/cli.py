@@ -488,6 +488,10 @@ class CliRunner:
         self.relay.start()
 
     def leave_room(self):
+        try:
+            self.core_api.broadcast_message({"type": "peer_left", "peer_id": self.core_api.local_id})
+        except Exception:
+            pass
         if self.relay:
             self.relay.stop()
             self.relay = None

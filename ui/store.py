@@ -40,6 +40,17 @@ class AppStore:
                     "talking_rms": 0
                 }
                 state_changed = True
+            else:
+                self._state["members"][pid]["status"] = "connected"
+                if "callsign" in payload:
+                    self._state["members"][pid]["callsign"] = payload["callsign"]
+                state_changed = True
+
+        elif action_type == "UPDATE_CALLSIGN":
+            pid = payload["peer_id"]
+            if pid in self._state["members"]:
+                self._state["members"][pid]["callsign"] = payload["callsign"]
+                state_changed = True
                 
         elif action_type == "MEMBER_LEFT":
             pid = payload["peer_id"]
@@ -75,6 +86,11 @@ class AppStore:
         elif action_type == "SET_VOLUMES":
             if "mic" in payload: self._state["mic_volume"] = payload["mic"]
             if "speaker" in payload: self._state["volume"] = payload["speaker"]
+            state_changed = True
+            
+        elif action_type == "RESET_ROOM":
+            self._state["members"].clear()
+            self._state["is_sharing"] = False
             state_changed = True
             
         if state_changed:

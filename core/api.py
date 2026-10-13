@@ -21,6 +21,8 @@ class CoreAPI:
         self._engine.callsign = self.callsign
         self.callsign_map = self.db.get_all_contacts()
         self.callsign_map[self.local_id] = self.callsign
+        self._engine.callsign_map = self.callsign_map
+        self._engine.core_api_ref = self
         
         self.message_handlers = []
         

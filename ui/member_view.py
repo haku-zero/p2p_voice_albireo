@@ -10,6 +10,12 @@ class MemberView:
         self.member_labels = {}
 
     def add_member(self, member_id, name):
+        if member_id in self.member_labels:
+            ui_elems = self.member_labels[member_id]
+            if ui_elems.get("name_lbl") and ui_elems["name_lbl"].winfo_exists():
+                ui_elems["name_lbl"].configure(text=name)
+            return
+            
         row = ctk.CTkFrame(self.frame, fg_color="transparent", corner_radius=0, border_width=1, border_color=BORDER_COLOR)
         row.pack(fill="x", pady=5, padx=5)
         indicator = ctk.CTkProgressBar(row, width=80, height=8, corner_radius=0, progress_color=BORDER_COLOR)
@@ -59,6 +65,15 @@ class MemberView:
         name_lbl.bind("<Button-3>", on_right_click)
         
         self.member_labels[member_id] = {"row": row, "indicator": indicator, "name_lbl": name_lbl, "ping_lbl": ping_lbl}
+
+    def update_callsign(self, member_id, callsign):
+        ui_elems = self.member_labels.get(member_id)
+        if ui_elems and ui_elems.get("name_lbl") and ui_elems["name_lbl"].winfo_exists():
+            my_id = self.local_id
+            if member_id == my_id:
+                ui_elems["name_lbl"].configure(text=f"[ LOCAL_NODE ] {callsign}")
+            else:
+                ui_elems["name_lbl"].configure(text=f"> {callsign} ({_T('established')})")
 
     def update_talking_state(self, member_id, rms):
         normalized_rms = min(rms / 4000.0, 1.0)

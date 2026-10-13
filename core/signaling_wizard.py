@@ -13,7 +13,12 @@ class SignalingWizard:
         self.engine.is_host = True
         try:
             crypto_mgr = getattr(self.engine, 'crypto', None)
-            sdp, sdp_type, remote_id = SignalingCodec.decode_payload(offer_b64, crypto_mgr=crypto_mgr)
+            decoded = SignalingCodec.decode_payload(offer_b64, crypto_mgr=crypto_mgr)
+            sdp, sdp_type, remote_id = decoded
+            callsign = getattr(decoded, 'callsign', None) or remote_id[:8]
+            self.engine.callsign_map[remote_id] = callsign
+            if hasattr(self.engine, 'db') and self.engine.db:
+                self.engine.db.save_contact(remote_id, callsign)
             
             if remote_id in self.engine.connections:
                 old_peer = self.engine.connections.pop(remote_id)
@@ -45,7 +50,12 @@ class SignalingWizard:
     async def client_accept_answer(self, ans_b64, callback):
         try:
             crypto_mgr = getattr(self.engine, 'crypto', None)
-            sdp, sdp_type, remote_id = SignalingCodec.decode_payload(ans_b64, "Host", crypto_mgr=crypto_mgr)
+            decoded = SignalingCodec.decode_payload(ans_b64, "Host", crypto_mgr=crypto_mgr)
+            sdp, sdp_type, remote_id = decoded
+            callsign = getattr(decoded, 'callsign', None) or remote_id[:8]
+            self.engine.callsign_map[remote_id] = callsign
+            if hasattr(self.engine, 'db') and self.engine.db:
+                self.engine.db.save_contact(remote_id, callsign)
             
             if 'host' in self.engine.connections:
                 peer = self.engine.connections.pop('host')

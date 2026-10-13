@@ -1,7 +1,7 @@
 __pycache__/
 test/
 *.pyc
-settings.json
+settings*.json
 debug.log
 .DS_Store
 *.db

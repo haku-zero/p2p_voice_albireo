@@ -1,5 +1,6 @@
 import sqlite3
 import time
+import os
 
 DB_FILE = "albireo_state.db"
 
@@ -8,8 +9,9 @@ class LocalDB:
     Handles local persistence of network state (contacts, chat history, governance logs).
     Provides a foundation for CRDT synchronization and offline history.
     """
-    def __init__(self):
-        self.conn = sqlite3.connect(DB_FILE, check_same_thread=False)
+    def __init__(self, db_file=None):
+        self.db_file = db_file or os.environ.get("ALBIREO_DB", DB_FILE)
+        self.conn = sqlite3.connect(self.db_file, check_same_thread=False)
         self.cursor = self.conn.cursor()
         self._init_tables()
         

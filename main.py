@@ -5,9 +5,14 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Albireo P2P Voice")
     parser.add_argument('--headless', action='store_true', help='Run as a headless SFU server')
     parser.add_argument('--cli', action='store_true', help='Run in interactive CLI terminal mode')
+    parser.add_argument('--profile', type=str, help='Profile name for multi-instance testing on the same machine')
     parser.add_argument('--room', type=str, help='Room code to join/host')
     parser.add_argument('--callsign', type=str, help='User callsign/display name')
     args = parser.parse_args()
+    
+    if args.profile:
+        from utils.config import set_profile
+        set_profile(args.profile)
     
     if args.headless:
         if not args.room:
